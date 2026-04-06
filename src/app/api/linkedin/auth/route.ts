@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+function getPublicOrigin(request: Request): string {
+  const proto = request.headers.get('x-forwarded-proto');
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  if (proto && host) return `${proto}://${host}`;
+  return new URL(request.url).origin;
+}
+
+export async function GET(request: Request) {
   const clientId = process.env.LINKEDIN_CLIENT_ID;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const origin = getPublicOrigin(request);
 
   if (!clientId) {
     return NextResponse.json({ error: 'LinkedIn not configured' }, { status: 500 });
@@ -13,7 +20,7 @@ export async function GET() {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
-    redirect_uri: `${appUrl}/api/linkedin/callback`,
+    redirect_uri: `${origin}/api/linkedin/callback`,
     state,
     scope: 'openid profile w_member_social',
   });
