@@ -16,6 +16,7 @@ import {
   Camera,
   Check,
   Download,
+  Eye,
   Loader2,
   Star,
   Upload,
@@ -215,6 +216,7 @@ export function PostGeneratorWizard() {
     { dataUrl: null },
   ]);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
 
   // Step 5
   const [selectedCaptionIndex, setSelectedCaptionIndex] = useState<number | null>(null);
@@ -299,6 +301,7 @@ export function PostGeneratorWizard() {
     setIsGenerating(false);
     setGeneratedImages([{ dataUrl: null }, { dataUrl: null }, { dataUrl: null }, { dataUrl: null }]);
     setSelectedImageIndex(null);
+    setPreviewImageIndex(null);
     setSelectedCaptionIndex(null);
     selfieStreamRef.current?.getTracks().forEach((t) => t.stop());
     selfieStreamRef.current = null;
@@ -950,7 +953,7 @@ The image should not look like staged, rather feel realistic.`,
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {generatedImages.map((img, i) => {
                   const isSelected = selectedImageIndex === i;
                   return (
@@ -958,13 +961,26 @@ The image should not look like staged, rather feel realistic.`,
                       key={i}
                       type="button"
                       className={[
-                        'relative overflow-hidden rounded-2xl border bg-secondary/20 aspect-[16/9] transition-all',
+                        'relative overflow-hidden rounded-2xl border bg-secondary/20 aspect-square transition-all',
                         isSelected ? 'border-accent ring-2 ring-accent/40' : 'border-border/60 hover:border-accent/50',
                       ].join(' ')}
                       onClick={() => img.dataUrl && setSelectedImageIndex(i)}
                       disabled={!img.dataUrl || isGenerating}
                       aria-label={`Select image ${i + 1}`}
                     >
+                      {img.dataUrl && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewImageIndex(i);
+                          }}
+                          className="absolute top-2 left-2 z-10 w-8 h-8 rounded-full bg-black/60 hover:bg-black/75 text-white flex items-center justify-center transition-colors"
+                          aria-label={`Preview image ${i + 1}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      )}
                       {img.dataUrl ? (
                         <img src={img.dataUrl} alt={`Generated ${i + 1}`} className="w-full h-full object-cover" />
                       ) : (
@@ -1241,6 +1257,28 @@ The image should not look like staged, rather feel realistic.`,
                   Start again
                 </Button>
               </div>
+            </div>
+          )}
+
+          {previewImageIndex !== null && generatedImages[previewImageIndex]?.dataUrl && (
+            <div
+              className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
+              onClick={() => setPreviewImageIndex(null)}
+            >
+              <button
+                type="button"
+                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 hover:bg-black/75 text-white flex items-center justify-center"
+                onClick={() => setPreviewImageIndex(null)}
+                aria-label="Close preview"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <img
+                src={generatedImages[previewImageIndex]!.dataUrl!}
+                alt={`Preview ${previewImageIndex + 1}`}
+                className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl"
+                onClick={(e) => e.stopPropagation()}
+              />
             </div>
           )}
 
