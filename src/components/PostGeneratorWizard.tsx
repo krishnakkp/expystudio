@@ -47,7 +47,12 @@ const CAPTION_OPTIONS: string[] = [
   `Automation at scale. Simplicity in action.\n\nThat’s the core theme at Red Hat Ansible Automation 2026—and it’s powerful to see it come alive.\n\n#RedHat #Ansible #Automation #RedHatAnsibleAutomation2026`,
 ];
 
-const EXTRA_POST_IMAGES = ['/red-hat/1.jpg', '/red-hat/2.jpg', '/red-hat/3.jpg'] as const;
+const EXTRA_POST_IMAGE_CANDIDATES = [
+  ['/red-hat/1.jpg', '/red-hat/1.JPG'],
+  ['/red-hat/2.jpg', '/red-hat/2.JPG'],
+  ['/red-hat/3.jpg', '/red-hat/3.JPG'],
+] as const;
+const EXTRA_POST_IMAGES = EXTRA_POST_IMAGE_CANDIDATES.map((paths) => paths[0]) as readonly string[];
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
 const SURVEY_CREATE_ENDPOINT =
   process.env.NEXT_PUBLIC_SURVEY_CREATE_URL?.trim() || 'https://expy.crafttechhub.com/survey/create';
@@ -661,17 +666,28 @@ The image should not look like staged, rather feel realistic.`,
       // 2) Upload the 3 large public images server-side to avoid the 10MB request limit
       for (let i = 0; i < EXTRA_POST_IMAGES.length; i++) {
         setLinkedinProgress(`Uploading image ${i + 2} of ${EXTRA_POST_IMAGES.length + 1}…`);
-        const upResp = await fetch('/api/linkedin/upload-public-image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ publicPath: EXTRA_POST_IMAGES[i] }),
-        });
-        if (!upResp.ok) {
-          const { error } = await upResp.json().catch(() => ({ error: `HTTP ${upResp.status}` }));
-          throw new Error(error);
+        let uploaded = false;
+        let lastError = `HTTP 500`;
+        const pathCandidates = EXTRA_POST_IMAGE_CANDIDATES[i] ?? [EXTRA_POST_IMAGES[i]];
+        for (const publicPath of pathCandidates) {
+          const upResp = await fetch('/api/linkedin/upload-public-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ publicPath }),
+          });
+          if (!upResp.ok) {
+            const { error } = await upResp.json().catch(() => ({ error: `HTTP ${upResp.status}` }));
+            lastError = error;
+            continue;
+          }
+          const { assetUrn } = await upResp.json();
+          assetUrns.push(assetUrn);
+          uploaded = true;
+          break;
         }
-        const { assetUrn } = await upResp.json();
-        assetUrns.push(assetUrn);
+        if (!uploaded) {
+          throw new Error(lastError);
+        }
       }
 
       setLinkedinProgress('Creating LinkedIn post…');
@@ -1217,7 +1233,21 @@ The image should not look like staged, rather feel realistic.`,
                   <div className="grid grid-cols-3 gap-2">
                     {EXTRA_POST_IMAGES.map((src, i) => (
                       <div key={i} className="aspect-square rounded-lg overflow-hidden bg-neutral-100">
-                        <img src={src} alt={`Extra ${i + 1}`} className="w-full h-full object-cover" />
+                        <img
+                          src={src}
+                          alt={`Extra ${i + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const img = e.currentTarget;
+                            if (!img.dataset.fallbackTried) {
+                              img.dataset.fallbackTried = '1';
+                              img.src = `/red-hat/${i + 1}.JPG`;
+                              return;
+                            }
+                            img.onerror = null;
+                            img.src = '/placeholder.svg';
+                          }}
+                        />
                       </div>
                     ))}
                   </div>
