@@ -156,6 +156,22 @@ async function generateLocalVariants(selfie: string): Promise<string[]> {
   ];
 }
 
+async function normalizeToJpeg(dataUrl: string): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const maxSide = 1536;
+  const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+  const width = Math.max(1, Math.round(img.width * scale));
+  const height = Math.max(1, Math.round(img.height * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas not available');
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.92);
+}
+
 async function copyToClipboard(text: string) {
   // Clipboard API requires secure context on most mobile browsers.
   if (navigator.clipboard && window.isSecureContext) {
@@ -255,7 +271,9 @@ export function PostGeneratorWizard() {
     if (!file) return;
     try {
       const dataUrl = await fileToDataUrl(file);
-      setSelfieDataUrl(dataUrl);
+      // Normalize phone formats (e.g., HEIC) to JPEG for AI providers.
+      const normalized = await normalizeToJpeg(dataUrl);
+      setSelfieDataUrl(normalized);
     } catch (err: unknown) {
       toast({ title: 'Upload failed', description: getErrorMessage(err), variant: 'destructive' });
     } finally {

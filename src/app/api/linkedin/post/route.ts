@@ -48,19 +48,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const postData = await postResp.json();
-
-  // Build a direct link to the post. The ugcPosts API returns an ID like
-  // "urn:li:ugcPost:1234567890" — extract the numeric activity ID.
-  let postUrl: string | null = null;
-  const postId = postData.id as string | undefined;
-  if (postId) {
-    // Extract the numeric part after the last colon
-    const activityId = postId.split(':').pop();
-    if (activityId) {
-      postUrl = `https://www.linkedin.com/feed/update/urn:li:activity:${activityId}/`;
+  // LinkedIn may return the created URN in either response body (`id`)
+  // or `x-restli-id` header depending on endpoint behavior.
+  const rawBody = await postResp.text();
+  let postId: string | undefined;
+  if (rawBody) {
+    try {
+      const postData = JSON.parse(rawBody) as { id?: string };
+      postId = postData.id;
+    } catch {
+      // Ignore non-JSON body; we'll still try header-based ID.
     }
   }
+  postId = postId ?? postResp.headers.get('x-restli-id') ?? undefined;
 
-  return NextResponse.json({ success: true, id: postId, postUrl });
+  // Prefer UGC permalink format. Activity links built from UGC IDs are often invalid.
+  // Keep feed URL as reliable fallback so users always land in LinkedIn.
+  const fallbackUrl = 'https://www.linkedin.com/feed/';
+  let postUrl = fallbackUrl;
+  if (postId) {
+    const urn = postId.startsWith('urn:') ? postId : `urn:li:ugcPost:${postId}`;
+    postUrl = `https://www.linkedin.com/feed/update/${urn}/`;
+  }
+
+  return NextResponse.json({ success: true, id: postId ?? null, postUrl, fallbackUrl });
 }
