@@ -7,9 +7,13 @@ let _client: SupabaseClient<Database> | null = null;
 function getClient(): SupabaseClient<Database> {
   if (!_client) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseKey =
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
     if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY');
+      throw new Error(
+        'Missing NEXT_PUBLIC_SUPABASE_URL and a Supabase public key (NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY)',
+      );
     }
     _client = createBrowserClient<Database>(supabaseUrl, supabaseKey, {
       auth: {
