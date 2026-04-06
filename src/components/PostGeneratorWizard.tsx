@@ -47,7 +47,7 @@ const CAPTION_OPTIONS: string[] = [
   `Automation at scale. Simplicity in action.\n\nThat’s the core theme at Red Hat Ansible Automation 2026—and it’s powerful to see it come alive.\n\n#RedHat #Ansible #Automation #RedHatAnsibleAutomation2026`,
 ];
 
-const EXTRA_POST_IMAGES = ['/red-hat/1.JPG', '/red-hat/2.JPG', '/red-hat/3.JPG'] as const;
+const EXTRA_POST_IMAGES = ['/red-hat/1.jpg', '/red-hat/2.jpg', '/red-hat/3.jpg'] as const;
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
 
 function isValidEmail(value: string) {
@@ -381,11 +381,13 @@ export function PostGeneratorWizard() {
   }, []);
 
   const promptVariants = useMemo(() => ([
-    'Create a professional LinkedIn-style photo at a tech conference keynote stage. Keep it photorealistic, phone-camera look, natural lighting.',
-    'Create a professional LinkedIn-style networking photo in a conference lobby. Photorealistic, candid, realistic lighting and perspective.',
-    'Create a professional LinkedIn-style expo-floor photo near booths and banners. Photorealistic, phone-camera look, realistic background.',
-    'Create a professional LinkedIn-style photo in front of an event backdrop (step-and-repeat). Photorealistic, crisp, realistic shadows.',
+    'Use the provided stage background image exactly as the scene. Place the same person as an event attendee standing naturally in front of the stage backdrop, slight smile, relaxed arms by the sides. Keep photorealistic phone-camera quality, realistic lighting, natural skin texture, and correct perspective.',
+    'Use the provided stage background image exactly as the scene. Place the same person as an event attendee in a 3/4 angle pose with one hand in pocket, calm expression, standing in front of the stage backdrop. Keep photorealistic phone-camera quality, realistic lighting, natural skin texture, and correct perspective.',
+    'Use the provided stage background image exactly as the scene. Place the same person as an event attendee in a candid standing pose, body slightly turned and looking slightly off-camera, in front of the stage backdrop. Keep photorealistic phone-camera quality, realistic lighting, natural skin texture, and correct perspective.',
+    'Use the provided stage background image exactly as the scene. Place the same person as an event attendee in a friendly pose with arms lightly crossed and a slight smile, standing in front of the stage backdrop. Keep photorealistic phone-camera quality, realistic lighting, natural skin texture, and correct perspective.',
   ]), []);
+
+  
 
   const generateFourImages = useCallback(async () => {
     if (!selfieDataUrl) return;
@@ -394,13 +396,18 @@ export function PostGeneratorWizard() {
     setSelectedImageIndex(null);
     try {
       const selfieBlob = dataUrlToBlob(selfieDataUrl);
+      // Include the fixed stage background as an additional reference image.
+      const bgResp = await fetch('/red-hat/bg.jpg', { cache: 'no-store' });
+      if (!bgResp.ok) throw new Error(`Failed to load stage background (${bgResp.status})`);
+      const stageBackgroundBlob = await bgResp.blob();
       const tasks = promptVariants.map(async (prompt) => {
-        const fullPrompt = `${prompt}\n\nUse the person in the provided photo as the subject. Make it look natural and professional.`;
+        const fullPrompt = `${prompt}\n\nUse the person from selfie.jpg as the subject and the scene from bg.jpg as the background. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`;
 
         // Try Gemini first (fast + lower cost), then fallback to OpenAI image edits.
         const form = new FormData();
         form.append('prompt', fullPrompt);
         form.append('image[]', selfieBlob, 'selfie.jpg');
+        form.append('image[]', stageBackgroundBlob, 'bg.jpg');
         const geminiResp = await fetch('/api/generate-image-gemini', { method: 'POST', body: form });
         if (geminiResp.ok) {
           const data = await geminiResp.json();
@@ -418,6 +425,7 @@ export function PostGeneratorWizard() {
         chatForm.append('size', '1024x1024');
         chatForm.append('quality', 'high');
         chatForm.append('image[]', selfieBlob, 'selfie.jpg');
+        chatForm.append('image[]', stageBackgroundBlob, 'bg.jpg');
 
         const chatResp = await fetch('/api/generate-image', { method: 'POST', body: chatForm });
         if (!chatResp.ok) {
