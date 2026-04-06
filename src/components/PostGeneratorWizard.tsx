@@ -434,33 +434,61 @@ The image should not look like staged, rather feel realistic.`,
       // Start local variants in parallel so we can fill quickly even if AI is slow/fails.
       const localVariantsPromise = generateLocalVariants(selfieDataUrl).catch(() => [] as string[]);
       const aiPrompts = promptVariants.slice(0, AI_VARIANTS_TO_GENERATE);
-      const tasks = aiPrompts.map(async (prompt) => {
+      const aiResults: GeneratedImage[] = [];
+
+      // Run sequentially for better reliability on mobile networks/devices.
+      for (const prompt of aiPrompts) {
         const fullPrompt = `${prompt}\n\nUse the person from selfie.jpg as the subject and the scene from bg.jpg as the background. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`;
 
-        // Keep this fast: Gemini only. If it fails, we fill from local variants.
-        const form = new FormData();
-        form.append('prompt', fullPrompt);
-        form.append('image[]', selfieBlob, 'selfie.jpg');
-        form.append('image[]', stageBackgroundBlob, 'bg.jpg');
-        const geminiResp = await fetch('/api/generate-image-gemini', { method: 'POST', body: form });
-        if (geminiResp.ok) {
-          const data = await geminiResp.json();
-          const b64 = data?.data?.[0]?.b64_json as string | undefined;
-          if (!b64) throw new Error('No image returned');
-          return `data:image/png;base64,${stripDataUrlPrefix(b64)}`;
-        }
-        const geminiErrText = await geminiResp.text().catch(() => '');
-        const geminiMsg = extractGeminiMessage(geminiErrText) || `Gemini HTTP ${geminiResp.status}`;
-        throw new Error(geminiMsg);
-      });
+        try {
+          // Try Gemini first
+          const form = new FormData();
+          form.append('prompt', fullPrompt);
+          form.append('image[]', selfieBlob, 'selfie.jpg');
+          form.append('image[]', stageBackgroundBlob, 'bg.jpg');
+          const geminiResp = await fetch('/api/generate-image-gemini', { method: 'POST', body: form });
+          if (geminiResp.ok) {
+            const data = await geminiResp.json();
+            const b64 = data?.data?.[0]?.b64_json as string | undefined;
+            if (!b64) throw new Error('No image returned');
+            aiResults.push({ dataUrl: `data:image/png;base64,${stripDataUrlPrefix(b64)}` });
+            continue;
+          }
 
-      const results = await Promise.allSettled(tasks);
+          const geminiErrText = await geminiResp.text().catch(() => '');
+          const geminiMsg = extractGeminiMessage(geminiErrText) || `Gemini HTTP ${geminiResp.status}`;
+
+          // Fallback to OpenAI when Gemini fails
+          const chatForm = new FormData();
+          chatForm.append('model', 'gpt-image-1');
+          chatForm.append('prompt', fullPrompt);
+          chatForm.append('n', '1');
+          chatForm.append('size', '1024x1024');
+          chatForm.append('quality', 'high');
+          chatForm.append('image[]', selfieBlob, 'selfie.jpg');
+          chatForm.append('image[]', stageBackgroundBlob, 'bg.jpg');
+          const chatResp = await fetch('/api/generate-image', { method: 'POST', body: chatForm });
+          if (chatResp.ok) {
+            const chatData = await chatResp.json();
+            const chatB64 = chatData?.data?.[0]?.b64_json as string | undefined;
+            if (!chatB64) throw new Error('No image returned');
+            aiResults.push({ dataUrl: `data:image/png;base64,${stripDataUrlPrefix(chatB64)}` });
+            continue;
+          }
+
+          const chatErrText = await chatResp.text().catch(() => '');
+          const chatMsg = extractGeminiMessage(chatErrText) || `OpenAI HTTP ${chatResp.status}`;
+          aiResults.push({ dataUrl: null, error: `${geminiMsg}; ${chatMsg}` });
+        } catch (err) {
+          aiResults.push({ dataUrl: null, error: getErrorMessage(err) });
+        }
+      }
       const locals = await localVariantsPromise;
       const next: GeneratedImage[] = [];
       for (let i = 0; i < 4; i++) {
-        const aiResult = i < results.length ? results[i] : null;
-        if (aiResult?.status === 'fulfilled') {
-          next.push({ dataUrl: aiResult.value });
+        const aiResult = aiResults[i] ?? null;
+        if (aiResult?.dataUrl) {
+          next.push({ dataUrl: aiResult.dataUrl });
           continue;
         }
         const localImg = locals[i];
@@ -470,10 +498,7 @@ The image should not look like staged, rather feel realistic.`,
         }
         next.push({
           dataUrl: null,
-          error:
-            aiResult && aiResult.status === 'rejected'
-              ? getErrorMessage(aiResult.reason) || 'Generation failed'
-              : 'Generation failed',
+          error: aiResult?.error || 'Generation failed',
         });
       }
 
