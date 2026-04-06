@@ -83,6 +83,14 @@ function stripDataUrlPrefix(dataUrlOrB64: string) {
   return dataUrlOrB64;
 }
 
+function getFriendlyGenerationError(raw: string) {
+  const text = raw.toLowerCase();
+  if (text.includes('413') || text.includes('request entity too large')) {
+    return 'Image upload is too large. Please use a smaller photo or try again after compression.';
+  }
+  return raw;
+}
+
 function dataUrlToBlob(dataUrl: string): Blob {
   const [header, b64] = dataUrl.split(',');
   const mimeType = header.replace('data:', '').replace(';base64', '') || 'image/jpeg';
@@ -159,6 +167,23 @@ async function normalizeToJpeg(dataUrl: string): Promise<string> {
   if (!ctx) throw new Error('Canvas not available');
   ctx.drawImage(img, 0, 0, width, height);
   return canvas.toDataURL('image/jpeg', 0.92);
+}
+
+async function normalizeForAiRequest(dataUrl: string): Promise<string> {
+  const img = await loadImage(dataUrl);
+  // Keep payload small for mobile/proxy upload limits.
+  const maxSide = 960;
+  const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+  const width = Math.max(1, Math.round(img.width * scale));
+  const height = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas not available');
+  ctx.drawImage(img, 0, 0, width, height);
+  // Lower JPEG quality to avoid 413 on mobile networks/proxies.
+  return canvas.toDataURL('image/jpeg', 0.72);
 }
 
 async function copyToClipboard(text: string) {
@@ -426,7 +451,8 @@ The image should not look like staged, rather feel realistic.`,
     setGeneratedImages([{ dataUrl: null }, { dataUrl: null }, { dataUrl: null }, { dataUrl: null }]);
     setSelectedImageIndex(null);
     try {
-      const selfieBlob = dataUrlToBlob(selfieDataUrl);
+      const aiSelfieDataUrl = await normalizeForAiRequest(selfieDataUrl);
+      const selfieBlob = dataUrlToBlob(aiSelfieDataUrl);
       // Try to include stage background if available, but do not block AI generation if missing.
       let stageBackgroundBlob: Blob | null = null;
       try {
@@ -464,7 +490,9 @@ The image should not look like staged, rather feel realistic.`,
           }
 
           const geminiErrText = await geminiResp.text().catch(() => '');
-          const geminiMsg = extractGeminiMessage(geminiErrText) || `Gemini HTTP ${geminiResp.status}`;
+          const geminiMsg = getFriendlyGenerationError(
+            extractGeminiMessage(geminiErrText) || `Gemini HTTP ${geminiResp.status}`
+          );
 
           // Fallback to OpenAI when Gemini fails
           const chatForm = new FormData();
@@ -485,10 +513,12 @@ The image should not look like staged, rather feel realistic.`,
           }
 
           const chatErrText = await chatResp.text().catch(() => '');
-          const chatMsg = extractGeminiMessage(chatErrText) || `OpenAI HTTP ${chatResp.status}`;
+          const chatMsg = getFriendlyGenerationError(
+            extractGeminiMessage(chatErrText) || `OpenAI HTTP ${chatResp.status}`
+          );
           aiResults.push({ dataUrl: null, error: `${geminiMsg}; ${chatMsg}` });
         } catch (err) {
-          aiResults.push({ dataUrl: null, error: getErrorMessage(err) });
+          aiResults.push({ dataUrl: null, error: getFriendlyGenerationError(getErrorMessage(err)) });
         }
       }
       const locals = await localVariantsPromise;
@@ -520,7 +550,8 @@ The image should not look like staged, rather feel realistic.`,
           const firstErr = aiResults.find((x) => x.error)?.error;
           toast({
             title: 'AI generation unavailable',
-            description: firstErr || 'Showing local variants because AI generation failed.',
+            description:
+              firstErr || 'Showing local variants because AI generation failed.',
             variant: 'destructive',
           });
         }
