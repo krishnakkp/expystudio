@@ -15,7 +15,6 @@ import {
   ArrowRight,
   Camera,
   Check,
-  Copy,
   Download,
   Loader2,
   Star,
@@ -49,6 +48,10 @@ const CAPTION_OPTIONS: string[] = [
 
 const EXTRA_POST_IMAGES = ['/red-hat/1.jpg', '/red-hat/2.jpg', '/red-hat/3.jpg'] as const;
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
+const SURVEY_CREATE_ENDPOINT =
+  process.env.NEXT_PUBLIC_SURVEY_CREATE_URL?.trim() || 'https://expy.crafttechhub.com/survey/create';
+const SURVEY_EVENT_ID = process.env.NEXT_PUBLIC_SURVEY_EVENT_ID?.trim() || '';
+const AI_VARIANTS_TO_GENERATE = 4;
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -100,21 +103,6 @@ async function downloadDataUrl(dataUrl: string, filename: string) {
   a.href = dataUrl;
   a.download = filename;
   a.click();
-}
-
-async function downloadUrl(url: string, filename: string) {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`Failed to download: ${resp.status}`);
-  const blob = await resp.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = filename;
-    a.click();
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
 }
 
 async function loadImage(dataUrl: string) {
@@ -215,6 +203,8 @@ export function PostGeneratorWizard() {
   const [fullName, setFullName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
+  const [surveySubmitting, setSurveySubmitting] = useState(false);
+  const [surveySaved, setSurveySaved] = useState(false);
 
   // Step 4
   const [isGenerating, setIsGenerating] = useState(false);
@@ -304,6 +294,8 @@ export function PostGeneratorWizard() {
     setFullName('');
     setCompanyName('');
     setEmail('');
+    setSurveySubmitting(false);
+    setSurveySaved(false);
     setIsGenerating(false);
     setGeneratedImages([{ dataUrl: null }, { dataUrl: null }, { dataUrl: null }, { dataUrl: null }]);
     setSelectedImageIndex(null);
@@ -319,6 +311,10 @@ export function PostGeneratorWizard() {
     setLinkedinError(null);
     setLinkedinPostUrl(null);
   }, []);
+
+  useEffect(() => {
+    setSurveySaved(false);
+  }, [fullName, companyName, email, survey]);
 
   const stopSelfieCamera = useCallback(() => {
     selfieStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -381,10 +377,42 @@ export function PostGeneratorWizard() {
   }, []);
 
   const promptVariants = useMemo(() => ([
-    'Use the provided stage background image exactly as the scene. Place the same person as an event attendee standing naturally in front of the stage backdrop, slight smile, relaxed arms by the sides. Keep photorealistic phone-camera quality, realistic lighting, natural skin texture, and correct perspective.',
-    'Use the provided stage background image exactly as the scene. Place the same person as an event attendee in a 3/4 angle pose with one hand in pocket, calm expression, standing in front of the stage backdrop. Keep photorealistic phone-camera quality, realistic lighting, natural skin texture, and correct perspective.',
-    'Use the provided stage background image exactly as the scene. Place the same person as an event attendee in a candid standing pose, body slightly turned and looking slightly off-camera, in front of the stage backdrop. Keep photorealistic phone-camera quality, realistic lighting, natural skin texture, and correct perspective.',
-    'Use the provided stage background image exactly as the scene. Place the same person as an event attendee in a friendly pose with arms lightly crossed and a slight smile, standing in front of the stage backdrop. Keep photorealistic phone-camera quality, realistic lighting, natural skin texture, and correct perspective.',
+    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee in a 3/4 angle pose with one hand in pocket, calm expression, standing in front of the stage backdrop.
+Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
+Mid-shot framing from mid-torso to slightly above head.
+Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
+Calm, confident expression with a very minimal, natural smile not exaggerated.
+Sharp focus on eyes, realistic depth of field.
+Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
+Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
+The image should not look like staged, rather feel realistic.`,
+    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee, the person faces the camera straight-on, but the shot is taken from just slightly above eye level - camera angled marginally downward, torso fully forward, no lateral rotation, standing in front of the stage backdrop.
+Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
+Mid-shot framing from mid-torso to slightly above head.
+Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
+Calm, confident expression with a very minimal, natural smile not exaggerated.
+Sharp focus on eyes, realistic depth of field.
+Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
+Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
+The image should not look like staged, rather feel realistic.`,
+    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee, the person faces nearly straight into the camera with a slight turn to the left, chin level, shoulders square, clean, authoritative, minimal movement from center, standing in front of the stage backdrop.
+Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
+Mid-shot framing from mid-torso to slightly above head.
+Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
+Calm, confident expression with a very minimal, natural smile not exaggerated.
+Sharp focus on eyes, realistic depth of field.
+Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
+Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
+The image should not look like staged, rather feel realistic.`,
+    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee, person faces the camera straight-on, chin raised just slightly above neutral - not dramatic, just enough to elongate the neck and project composure, shoulders relaxed, torso forward, standing in front of the stage backdrop.
+Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
+Mid-shot framing from mid-torso to slightly above head.
+Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
+Calm, confident expression with a very minimal, natural smile not exaggerated.
+Sharp focus on eyes, realistic depth of field.
+Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
+Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
+The image should not look like staged, rather feel realistic.`,
   ]), []);
 
   
@@ -400,10 +428,13 @@ export function PostGeneratorWizard() {
       const bgResp = await fetch('/red-hat/bg.jpg', { cache: 'no-store' });
       if (!bgResp.ok) throw new Error(`Failed to load stage background (${bgResp.status})`);
       const stageBackgroundBlob = await bgResp.blob();
-      const tasks = promptVariants.map(async (prompt) => {
+      // Start local variants in parallel so we can fill quickly even if AI is slow/fails.
+      const localVariantsPromise = generateLocalVariants(selfieDataUrl).catch(() => [] as string[]);
+      const aiPrompts = promptVariants.slice(0, AI_VARIANTS_TO_GENERATE);
+      const tasks = aiPrompts.map(async (prompt) => {
         const fullPrompt = `${prompt}\n\nUse the person from selfie.jpg as the subject and the scene from bg.jpg as the background. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`;
 
-        // Try Gemini first (fast + lower cost), then fallback to OpenAI image edits.
+        // Keep this fast: Gemini only. If it fails, we fill from local variants.
         const form = new FormData();
         form.append('prompt', fullPrompt);
         form.append('image[]', selfieBlob, 'selfie.jpg');
@@ -415,51 +446,41 @@ export function PostGeneratorWizard() {
           if (!b64) throw new Error('No image returned');
           return `data:image/png;base64,${stripDataUrlPrefix(b64)}`;
         }
-
-        // Gemini failed for this variant; fallback to OpenAI route.
         const geminiErrText = await geminiResp.text().catch(() => '');
-        const chatForm = new FormData();
-        chatForm.append('model', 'gpt-image-1');
-        chatForm.append('prompt', fullPrompt);
-        chatForm.append('n', '1');
-        chatForm.append('size', '1024x1024');
-        chatForm.append('quality', 'high');
-        chatForm.append('image[]', selfieBlob, 'selfie.jpg');
-        chatForm.append('image[]', stageBackgroundBlob, 'bg.jpg');
-
-        const chatResp = await fetch('/api/generate-image', { method: 'POST', body: chatForm });
-        if (!chatResp.ok) {
-          const chatErrText = await chatResp.text().catch(() => '');
-          const geminiMsg = extractGeminiMessage(geminiErrText) || `Gemini HTTP ${geminiResp.status}`;
-          const chatMsg = extractGeminiMessage(chatErrText) || `OpenAI HTTP ${chatResp.status}`;
-          throw new Error(`${geminiMsg}; ${chatMsg}`);
-        }
-        const chatData = await chatResp.json();
-        const chatB64 = chatData?.data?.[0]?.b64_json as string | undefined;
-        if (!chatB64) throw new Error('No image returned');
-        return `data:image/png;base64,${stripDataUrlPrefix(chatB64)}`;
+        const geminiMsg = extractGeminiMessage(geminiErrText) || `Gemini HTTP ${geminiResp.status}`;
+        throw new Error(geminiMsg);
       });
 
       const results = await Promise.allSettled(tasks);
-      const next: GeneratedImage[] = results.map((r) => {
-        if (r.status === 'fulfilled') return { dataUrl: r.value };
-        return { dataUrl: null, error: getErrorMessage(r.reason) || 'Generation failed' };
-      });
-      const okCount = next.filter((x) => Boolean(x.dataUrl)).length;
-      if (okCount === 0) {
-        // If Gemini quota is exhausted, still give the user 4 usable options.
-        const locals = await generateLocalVariants(selfieDataUrl);
-        const localImgs: GeneratedImage[] = locals.map((u) => ({ dataUrl: u }));
-        setGeneratedImages(localImgs);
-        setSelectedImageIndex(0);
-        toast({
-          title: 'Using local enhancements',
-          description: 'AI quota is unavailable right now, so we generated 4 local variants instead.',
+      const locals = await localVariantsPromise;
+      const next: GeneratedImage[] = [];
+      for (let i = 0; i < 4; i++) {
+        const aiResult = i < results.length ? results[i] : null;
+        if (aiResult?.status === 'fulfilled') {
+          next.push({ dataUrl: aiResult.value });
+          continue;
+        }
+        const localImg = locals[i];
+        if (localImg) {
+          next.push({ dataUrl: localImg });
+          continue;
+        }
+        next.push({
+          dataUrl: null,
+          error:
+            aiResult && aiResult.status === 'rejected'
+              ? getErrorMessage(aiResult.reason) || 'Generation failed'
+              : 'Generation failed',
         });
-      } else {
+      }
+
+      const okCount = next.filter((x) => Boolean(x.dataUrl)).length;
+      if (okCount > 0) {
         setGeneratedImages(next);
         const firstOk = next.findIndex((x) => Boolean(x.dataUrl));
         if (firstOk >= 0) setSelectedImageIndex(firstOk);
+      } else {
+        throw new Error('Could not generate image variants');
       }
     } catch (err: unknown) {
       // Hard failure: fallback to local variants
@@ -590,13 +611,6 @@ export function PostGeneratorWizard() {
       const postData = await postResp.json();
       if (postData?.postUrl) setLinkedinPostUrl(postData.postUrl);
 
-      // Best-effort copy (will fail on non-secure contexts, so don't block).
-      try {
-        await copyToClipboard(selectedCaption);
-      } catch {
-        // ignore
-      }
-
       setStep(7);
     } catch (err) {
       setLinkedinError(getErrorMessage(err));
@@ -615,6 +629,57 @@ export function PostGeneratorWizard() {
     selectedCaption,
     toast,
   ]);
+
+  const submitSurveyAndContinue = useCallback(async () => {
+    if (!canGoStep3 || surveySubmitting) return;
+    if (surveySaved) {
+      setStep(4);
+      return;
+    }
+
+    setSurveySubmitting(true);
+    try {
+      const body = new URLSearchParams();
+      body.set('full_name', fullName.trim());
+      body.set('email', email.trim());
+      body.set('company_name', companyName.trim());
+      body.set('q1_overall_satisfaction', String(survey.q1 ?? 0));
+      body.set('q2_content_quality', String(survey.q2 ?? 0));
+      body.set('q3_event_experience', String(survey.q3 ?? 0));
+      body.set('q4_recommend_likelihood', String(survey.q4 ?? 0));
+      body.set('q5_expectations_met', String(survey.q5 ?? 0));
+      if (SURVEY_EVENT_ID) body.set('event_id', SURVEY_EVENT_ID);
+
+      const resp = await fetch(SURVEY_CREATE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: body.toString(),
+      });
+
+      const raw = await resp.text();
+      let parsed: { status?: string; message?: string } | null = null;
+      try {
+        parsed = raw ? JSON.parse(raw) : null;
+      } catch {
+        parsed = null;
+      }
+
+      if (!resp.ok || parsed?.status === 'error') {
+        throw new Error(parsed?.message || `Survey API failed (${resp.status})`);
+      }
+
+      setSurveySaved(true);
+      setStep(4);
+    } catch (err) {
+      toast({
+        title: 'Survey submit failed',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setSurveySubmitting(false);
+    }
+  }, [canGoStep3, surveySubmitting, surveySaved, fullName, email, companyName, survey, toast]);
 
   return (
     <div className="min-h-dvh gradient-hero flex items-center justify-center px-4 py-6 overflow-hidden">
@@ -697,7 +762,7 @@ export function PostGeneratorWizard() {
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                You can review terms any time at <a className="underline" href="/terms" target="_blank" rel="noreferrer">Terms</a>.
+                You can review terms any time at <a className="underline" href="https://visuallystudios.com/privacy-policy/" target="_blank" rel="noreferrer">Terms</a>.
               </p>
             </div>
           )}
@@ -855,8 +920,21 @@ export function PostGeneratorWizard() {
                 <Button variant="heroOutline" className="h-11 rounded-xl" onClick={goBack}>
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
-                <Button variant="hero" className="flex-1 h-11 rounded-xl" disabled={!canGoStep3} onClick={() => setStep(4)}>
-                  Generate images <ArrowRight className="w-4 h-4 ml-2" />
+                <Button
+                  variant="hero"
+                  className="flex-1 h-11 rounded-xl"
+                  disabled={!canGoStep3 || surveySubmitting}
+                  onClick={submitSurveyAndContinue}
+                >
+                  {surveySubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...
+                    </>
+                  ) : (
+                    <>
+                      Generate images <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -868,11 +946,11 @@ export function PostGeneratorWizard() {
               <div>
                 <h2 className="text-2xl font-bold tracking-tight">Select your image</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  We’ll generate 4 AI-enhanced images. Pick 1.
+                  We’ll quickly prepare 4 enhanced images. Pick 1.
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 {generatedImages.map((img, i) => {
                   const isSelected = selectedImageIndex === i;
                   return (
@@ -880,7 +958,7 @@ export function PostGeneratorWizard() {
                       key={i}
                       type="button"
                       className={[
-                        'relative overflow-hidden rounded-2xl border bg-secondary/20 aspect-square transition-all',
+                        'relative overflow-hidden rounded-2xl border bg-secondary/20 aspect-[16/9] transition-all',
                         isSelected ? 'border-accent ring-2 ring-accent/40' : 'border-border/60 hover:border-accent/50',
                       ].join(' ')}
                       onClick={() => img.dataUrl && setSelectedImageIndex(i)}
@@ -1090,26 +1168,6 @@ export function PostGeneratorWizard() {
                 </Button>
               </div>
 
-              <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">LinkedIn</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {linkedinConnected === null
-                        ? 'Checking…'
-                        : linkedinConnected
-                          ? `Connected${linkedinName ? ` as ${linkedinName}` : ''}`
-                          : 'Not connected'}
-                    </p>
-                  </div>
-                  {!linkedinConnected && linkedinConnected !== null && (
-                    <Button type="button" variant="outline" className="rounded-xl" onClick={connectLinkedIn}>
-                      Connect
-                    </Button>
-                  )}
-                </div>
-              </div>
-
               <div className="rounded-2xl border border-border/60 overflow-hidden bg-card">
                 <div className="p-4 border-b border-border/60 flex items-center justify-between">
                   <p className="text-sm font-semibold">Actions</p>
@@ -1120,36 +1178,26 @@ export function PostGeneratorWizard() {
                       variant="outline"
                       className="rounded-lg"
                       onClick={async () => {
-                        try {
-                          await copyToClipboard(selectedCaption);
-                          toast({ title: 'Copied', description: 'Caption copied to clipboard.' });
-                        } catch {
+                        const downloadable = generatedImages
+                          .map((img) => img.dataUrl)
+                          .filter((url): url is string => Boolean(url));
+                        if (downloadable.length === 0) {
                           toast({
-                            title: 'Copy not available',
-                            description: 'On mobile HTTP (LAN) browsers, copy is often blocked. You can long-press the caption and copy manually.',
+                            title: 'No images to download',
+                            description: 'Please generate images first.',
+                            variant: 'destructive',
                           });
+                          return;
                         }
-                      }}
-                      disabled={!canGoStep5}
-                    >
-                      <Copy className="w-4 h-4 mr-2" /> Copy
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="rounded-lg"
-                      onClick={async () => {
-                        if (selectedImageIndex === null) return;
-                        const selected = generatedImages[selectedImageIndex]?.dataUrl;
-                        if (selected) await downloadDataUrl(selected, `eventsnap-selected-${Date.now()}.jpg`);
                         await Promise.all(
-                          EXTRA_POST_IMAGES.map((url, i) => downloadUrl(url, `eventsnap-red-hat-${i + 1}.jpg`))
+                          downloadable.map((url, i) =>
+                            downloadDataUrl(url, `expy-studio-generated-${i + 1}-${Date.now()}.jpg`)
+                          )
                         );
                       }}
-                      disabled={!canGoStep4}
+                      disabled={generatedImages.every((img) => !img.dataUrl)}
                     >
-                      <Download className="w-4 h-4 mr-2" /> Download
+                      <Download className="w-4 h-4 mr-2" /> Download 4 images
                     </Button>
                   </div>
                 </div>
@@ -1176,15 +1224,15 @@ export function PostGeneratorWizard() {
                   Your LinkedIn post has been published.
                 </p>
               </div>
-              {linkedinPostUrl && (
-                <Button
-                  variant="outline"
-                  className="h-11 rounded-xl"
-                  onClick={() => window.open(linkedinPostUrl!, '_blank', 'noopener,noreferrer')}
-                >
-                  View post
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                className="h-11 rounded-xl"
+                onClick={() => {
+                  window.location.assign('https://www.linkedin.com/feed/');
+                }}
+              >
+                Go to LinkedIn
+              </Button>
               <div className="flex flex-col gap-3">
                 <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(5)}>
                   Back to preview

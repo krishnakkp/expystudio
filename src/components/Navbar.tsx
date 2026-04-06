@@ -56,7 +56,7 @@ export function Navbar() {
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full gradient-accent flex items-center justify-center shadow-glow">
               <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-accent-foreground" />
             </div>
-            <span className="text-lg sm:text-xl font-bold text-foreground">EventSnap AI</span>
+            <span className="text-lg sm:text-xl font-bold text-foreground">Expy Studio AI - Visually Studio</span>
           </Link>
 
           {/* Desktop nav */}

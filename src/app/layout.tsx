@@ -11,11 +11,11 @@ const redHatDisplay = Red_Hat_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'EventSnap AI',
-  description: 'AI-powered event photos ready for LinkedIn in 60 seconds',
+  title: 'Expy Studio AI - Visually Studio',
+  description: 'Expy Studio AI - Visually Studio',
   openGraph: {
-    title: 'EventSnap AI',
-    description: 'AI-powered event photos ready for LinkedIn in 60 seconds',
+    title: 'Expy Studio AI - Visually Studio',
+    description: 'Expy Studio AI - Visually Studio',
   },
 };
 
