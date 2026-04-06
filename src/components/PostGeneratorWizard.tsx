@@ -96,6 +96,20 @@ function getFriendlyGenerationError(raw: string) {
   return raw;
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs = 45000
+) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 function dataUrlToBlob(dataUrl: string): Blob {
   const [header, b64] = dataUrl.split(',');
   const mimeType = header.replace('data:', '').replace(';base64', '') || 'image/jpeg';
@@ -273,6 +287,7 @@ export function PostGeneratorWizard() {
   const [linkedinName, setLinkedinName] = useState<string | null>(null);
   const [linkedinPicture, setLinkedinPicture] = useState<string | null>(null);
   const [linkedinPosting, setLinkedinPosting] = useState(false);
+  const linkedinPublishLockRef = useRef(false);
   const [linkedinProgress, setLinkedinProgress] = useState('');
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
   const [linkedinPostUrl, setLinkedinPostUrl] = useState<string | null>(null);
@@ -490,7 +505,8 @@ The image should not look like staged, rather feel realistic.`,
       const aiResults: GeneratedImage[] = [];
 
       // Run sequentially for better reliability on mobile networks/devices.
-      for (const prompt of aiPrompts) {
+      for (let promptIndex = 0; promptIndex < aiPrompts.length; promptIndex++) {
+        const prompt = aiPrompts[promptIndex];
         const fullPrompt = stageBackgroundBlob
           ? `${prompt}\n\nUse the person from selfie.jpg as the subject and the scene from bg.jpg as the background. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`
           : `${prompt}\n\nUse the person from selfie.jpg as the subject. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`;
@@ -501,12 +517,18 @@ The image should not look like staged, rather feel realistic.`,
           form.append('prompt', fullPrompt);
           form.append('image[]', selfieBlob, 'selfie.jpg');
           if (stageBackgroundBlob) form.append('image[]', stageBackgroundBlob, 'bg.jpg');
-          const geminiResp = await fetch('/api/generate-image-gemini', { method: 'POST', body: form });
+          const geminiResp = await fetchWithTimeout('/api/generate-image-gemini', { method: 'POST', body: form }, 45000);
           if (geminiResp.ok) {
             const data = await geminiResp.json();
             const b64 = data?.data?.[0]?.b64_json as string | undefined;
             if (!b64) throw new Error('No image returned');
-            aiResults.push({ dataUrl: `data:image/png;base64,${stripDataUrlPrefix(b64)}` });
+            const generated = `data:image/png;base64,${stripDataUrlPrefix(b64)}`;
+            aiResults.push({ dataUrl: generated });
+            setGeneratedImages((prev) => {
+              const next = [...prev];
+              next[promptIndex] = { dataUrl: generated };
+              return next;
+            });
             continue;
           }
 
@@ -524,12 +546,18 @@ The image should not look like staged, rather feel realistic.`,
           chatForm.append('quality', 'high');
           chatForm.append('image[]', selfieBlob, 'selfie.jpg');
           if (stageBackgroundBlob) chatForm.append('image[]', stageBackgroundBlob, 'bg.jpg');
-          const chatResp = await fetch('/api/generate-image', { method: 'POST', body: chatForm });
+          const chatResp = await fetchWithTimeout('/api/generate-image', { method: 'POST', body: chatForm }, 45000);
           if (chatResp.ok) {
             const chatData = await chatResp.json();
             const chatB64 = chatData?.data?.[0]?.b64_json as string | undefined;
             if (!chatB64) throw new Error('No image returned');
-            aiResults.push({ dataUrl: `data:image/png;base64,${stripDataUrlPrefix(chatB64)}` });
+            const generated = `data:image/png;base64,${stripDataUrlPrefix(chatB64)}`;
+            aiResults.push({ dataUrl: generated });
+            setGeneratedImages((prev) => {
+              const next = [...prev];
+              next[promptIndex] = { dataUrl: generated };
+              return next;
+            });
             continue;
           }
 
@@ -537,9 +565,21 @@ The image should not look like staged, rather feel realistic.`,
           const chatMsg = getFriendlyGenerationError(
             extractGeminiMessage(chatErrText) || `OpenAI HTTP ${chatResp.status}`
           );
-          aiResults.push({ dataUrl: null, error: `${geminiMsg}; ${chatMsg}` });
+          const failed = { dataUrl: null, error: `${geminiMsg}; ${chatMsg}` };
+          aiResults.push(failed);
+          setGeneratedImages((prev) => {
+            const next = [...prev];
+            next[promptIndex] = failed;
+            return next;
+          });
         } catch (err) {
-          aiResults.push({ dataUrl: null, error: getFriendlyGenerationError(getErrorMessage(err)) });
+          const failed = { dataUrl: null, error: getFriendlyGenerationError(getErrorMessage(err)) };
+          aiResults.push(failed);
+          setGeneratedImages((prev) => {
+            const next = [...prev];
+            next[promptIndex] = failed;
+            return next;
+          });
         }
       }
       const locals = await localVariantsPromise;
@@ -638,6 +678,8 @@ The image should not look like staged, rather feel realistic.`,
   }, [generatedImages, selectedImageIndex]);
 
   const publish = useCallback(async () => {
+    if (linkedinPosting || linkedinPublishLockRef.current) return;
+    linkedinPublishLockRef.current = true;
     setLinkedinError(null);
     setLinkedinPostUrl(null);
 
@@ -707,11 +749,20 @@ The image should not look like staged, rather feel realistic.`,
       }
 
       setLinkedinProgress('Creating LinkedIn post…');
-      const postResp = await fetch('/api/linkedin/post', {
+      const postPayload = JSON.stringify({ caption: selectedCaption, assetUrns });
+      let postResp = await fetch('/api/linkedin/post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caption: selectedCaption, assetUrns }),
+        body: postPayload,
       });
+      if (!postResp.ok && postResp.status >= 500) {
+        await new Promise((r) => setTimeout(r, 1200));
+        postResp = await fetch('/api/linkedin/post', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: postPayload,
+        });
+      }
       if (!postResp.ok) {
         const { error } = await postResp.json().catch(() => ({ error: `HTTP ${postResp.status}` }));
         throw new Error(error);
@@ -726,6 +777,7 @@ The image should not look like staged, rather feel realistic.`,
     } finally {
       setLinkedinPosting(false);
       setLinkedinProgress('');
+      linkedinPublishLockRef.current = false;
     }
   }, [
     canGoStep4,
@@ -790,9 +842,9 @@ The image should not look like staged, rather feel realistic.`,
   }, [canGoStep3, surveySubmitting, surveySaved, fullName, email, companyName, survey, toast]);
 
   return (
-    <div className="min-h-dvh gradient-hero flex items-center justify-center px-4 py-6 overflow-hidden">
+    <div className="min-h-[100svh] w-full bg-black gradient-hero flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
       <div className="w-full max-w-md">
-        <Card className="dark relative overflow-hidden border text-card-foreground shadow-sm shadow-card border-border/40 rounded-3xl p-6 bg-card/70 backdrop-blur-md bg-[url('/event/bg-dark.png')] bg-cover bg-center before:content-[''] before:absolute before:inset-0 before:bg-black/60">
+        <Card className="dark relative overflow-hidden border text-card-foreground shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] sm:min-h-0 p-6 bg-card/70 backdrop-blur-md bg-[url('/event/bg-dark.png')] bg-cover bg-center before:content-[''] before:absolute before:inset-0 before:bg-black/60">
           <div className="relative z-10">
           {/* Branding (inside card) */}
           <div className="flex items-center justify-center mb-4">
@@ -1090,7 +1142,7 @@ The image should not look like staged, rather feel realistic.`,
                         <img src={img.dataUrl} alt={`Generated ${i + 1}`} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
-                          {isGenerating ? (
+                          {isGenerating && !img.error ? (
                             <>
                               <Loader2 className="w-6 h-6 animate-spin mb-2" />
                               <span className="text-xs">Generating…</span>
