@@ -377,18 +377,41 @@ export function PostGeneratorWizard() {
     try {
       const selfieBlob = dataUrlToBlob(selfieDataUrl);
       const tasks = promptVariants.map(async (prompt) => {
+        const fullPrompt = `${prompt}\n\nUse the person in the provided photo as the subject. Make it look natural and professional.`;
+
+        // Try Gemini first (fast + lower cost), then fallback to OpenAI image edits.
         const form = new FormData();
-        form.append('prompt', `${prompt}\n\nUse the person in the provided photo as the subject. Make it look natural and professional.`);
+        form.append('prompt', fullPrompt);
         form.append('image[]', selfieBlob, 'selfie.jpg');
-        const resp = await fetch('/api/generate-image-gemini', { method: 'POST', body: form });
-        if (!resp.ok) {
-          const errText = await resp.text();
-          throw new Error(extractGeminiMessage(errText) || `HTTP ${resp.status}`);
+        const geminiResp = await fetch('/api/generate-image-gemini', { method: 'POST', body: form });
+        if (geminiResp.ok) {
+          const data = await geminiResp.json();
+          const b64 = data?.data?.[0]?.b64_json as string | undefined;
+          if (!b64) throw new Error('No image returned');
+          return `data:image/png;base64,${stripDataUrlPrefix(b64)}`;
         }
-        const data = await resp.json();
-        const b64 = data?.data?.[0]?.b64_json as string | undefined;
-        if (!b64) throw new Error('No image returned');
-        return `data:image/png;base64,${stripDataUrlPrefix(b64)}`;
+
+        // Gemini failed for this variant; fallback to OpenAI route.
+        const geminiErrText = await geminiResp.text().catch(() => '');
+        const chatForm = new FormData();
+        chatForm.append('model', 'gpt-image-1');
+        chatForm.append('prompt', fullPrompt);
+        chatForm.append('n', '1');
+        chatForm.append('size', '1024x1024');
+        chatForm.append('quality', 'high');
+        chatForm.append('image[]', selfieBlob, 'selfie.jpg');
+
+        const chatResp = await fetch('/api/generate-image', { method: 'POST', body: chatForm });
+        if (!chatResp.ok) {
+          const chatErrText = await chatResp.text().catch(() => '');
+          const geminiMsg = extractGeminiMessage(geminiErrText) || `Gemini HTTP ${geminiResp.status}`;
+          const chatMsg = extractGeminiMessage(chatErrText) || `OpenAI HTTP ${chatResp.status}`;
+          throw new Error(`${geminiMsg}; ${chatMsg}`);
+        }
+        const chatData = await chatResp.json();
+        const chatB64 = chatData?.data?.[0]?.b64_json as string | undefined;
+        if (!chatB64) throw new Error('No image returned');
+        return `data:image/png;base64,${stripDataUrlPrefix(chatB64)}`;
       });
 
       const results = await Promise.allSettled(tasks);
