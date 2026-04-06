@@ -176,19 +176,35 @@ async function normalizeToJpeg(dataUrl: string): Promise<string> {
 
 async function normalizeForAiRequest(dataUrl: string): Promise<string> {
   const img = await loadImage(dataUrl);
-  // Keep payload small for mobile/proxy upload limits.
-  const maxSide = 960;
-  const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-  const width = Math.max(1, Math.round(img.width * scale));
-  const height = Math.max(1, Math.round(img.height * scale));
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas not available');
-  ctx.drawImage(img, 0, 0, width, height);
-  // Lower JPEG quality to avoid 413 on mobile networks/proxies.
-  return canvas.toDataURL('image/jpeg', 0.72);
+  // Keep payload very small for strict mobile/proxy upload limits.
+  const TARGET_MAX_BYTES = 120 * 1024;
+  let width = Math.max(1, Math.round(img.width * Math.min(1, 960 / Math.max(img.width, img.height))));
+  let height = Math.max(1, Math.round(img.height * Math.min(1, 960 / Math.max(img.width, img.height))));
+  let quality = 0.7;
+
+  const render = (w: number, h: number, q: number) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas not available');
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', q);
+  };
+
+  let out = render(width, height, quality);
+  let outSize = dataUrlToBlob(out).size;
+
+  // Iteratively shrink dimensions + quality until under target size.
+  for (let i = 0; i < 8 && outSize > TARGET_MAX_BYTES; i++) {
+    quality = Math.max(0.4, quality - 0.06);
+    width = Math.max(320, Math.round(width * 0.85));
+    height = Math.max(320, Math.round(height * 0.85));
+    out = render(width, height, quality);
+    outSize = dataUrlToBlob(out).size;
+  }
+
+  return out;
 }
 
 async function copyToClipboard(text: string) {
