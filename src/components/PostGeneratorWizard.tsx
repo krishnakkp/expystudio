@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -839,7 +838,7 @@ The image should not look like staged, rather feel realistic.`,
   }, [canGoStep3, surveySubmitting, surveySaved, fullName, email, companyName, survey, toast]);
 
   return (
-    <div className="min-h-[100svh] w-full bg-black gradient-hero flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
+    <div className="min-h-[100svh] w-full bg-black bg-[url('/event/bg-dark.png')] bg-cover bg-center bg-fixed flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
       <div className="w-full max-w-md">
         <Card className="dark relative overflow-hidden border text-card-foreground shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] sm:min-h-0 p-6 bg-card/70 backdrop-blur-md bg-[url('/event/bg-dark.png')] bg-cover bg-center before:content-[''] before:absolute before:inset-0 before:bg-black/60">
           <div className="relative z-10">
@@ -848,7 +847,7 @@ The image should not look like staged, rather feel realistic.`,
             <img
               src="/event/ansible.png"
               alt="Ansible"
-              className="h-10 w-auto drop-shadow"
+              className="h-12 w-auto drop-shadow"
             />
           </div>
 
@@ -1251,10 +1250,8 @@ The image should not look like staged, rather feel realistic.`,
           {step === 6 && (
             <div className="space-y-5">
               <div className="text-center">
+                
                 <h2 className="text-2xl font-bold tracking-tight">Preview</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  This is how it will look on LinkedIn.
-                </p>
               </div>
 
               <div className="rounded-2xl bg-white text-black border border-border/60 overflow-hidden">
@@ -1353,44 +1350,36 @@ The image should not look like staged, rather feel realistic.`,
               </div>
 
               <div className="rounded-2xl border border-border/60 overflow-hidden bg-card">
-                <div className="p-4 border-b border-border/60 flex items-center justify-between">
-                  <p className="text-sm font-semibold">Actions</p>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="rounded-lg"
-                      onClick={async () => {
-                        const downloadable = generatedImages
-                          .map((img) => img.dataUrl)
-                          .filter((url): url is string => Boolean(url));
-                        if (downloadable.length === 0) {
-                          toast({
-                            title: 'No images to download',
-                            description: 'Please generate images first.',
-                            variant: 'destructive',
-                          });
-                          return;
-                        }
-                        await Promise.all(
-                          downloadable.map((url, i) =>
-                            downloadDataUrl(url, `expy-studio-generated-${i + 1}-${Date.now()}.jpg`)
-                          )
-                        );
-                      }}
-                      disabled={generatedImages.every((img) => !img.dataUrl)}
-                    >
-                      <Download className="w-4 h-4 mr-2" /> Download 4 images
-                    </Button>
-                  </div>
+                <div className="p-4 border-b border-border/60">
+                  <p className="text-sm font-semibold">Download images</p>
                 </div>
-                <div className="p-4">
-                  <Textarea
-                    value={selectedCaption}
-                    readOnly
-                    className="min-h-[90px] resize-none bg-secondary/10"
-                  />
+                <div className="p-4 grid grid-cols-2 gap-3">
+                  {generatedImages.map((img, i) => (
+                    <div key={i} className="rounded-xl border border-border/60 bg-secondary/10 p-2">
+                      <div className="relative w-full aspect-square rounded-lg overflow-hidden bg-secondary/30">
+                        {img.dataUrl ? (
+                          <img src={img.dataUrl} alt={`Generated ${i + 1}`} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
+                            N/A
+                          </div>
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="absolute top-2 right-2 h-7 px-2 rounded-md bg-black/65 border-white/20 text-white hover:bg-black/80"
+                          disabled={!img.dataUrl}
+                          onClick={async () => {
+                            if (!img.dataUrl) return;
+                            await downloadDataUrl(img.dataUrl, `expy-studio-image-${i + 1}-${Date.now()}.jpg`);
+                          }}
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
