@@ -41,10 +41,10 @@ const SURVEY_QUESTIONS: { id: string; label: string }[] = [
 ];
 
 const CAPTION_OPTIONS: string[] = [
-  `Building faster. Operating smarter.\n\nThat’s what Ansible Automation is enabling today.\n\n#Ansible #RedHat #DevOps #CloudAutomation #RedHat #AnsibleAutomation #RedHatAnsible2026`,
-  `What stood out at Red Hat Ansible Automation 2026 wasn’t just the technology—it was the measurable business impact.\n\nAutomation is no longer just an engineering win—it’s a boardroom conversation.\n\n#RedHat #AnsibleAutomation #RedHatAnsibleAutomation2026 #RedHatAnsible2026`,
-  `From complexity to clarity—powered by automation.\n\nGreat conversations and real use cases at Red Hat Ansible Automation 2026.\n\n#RedHat #AnsibleAutomation #RedHatAnsibleAutomation2026`,
-  `Automation at scale. Simplicity in action.\n\nThat’s the core theme at Red Hat Ansible Automation 2026—and it’s powerful to see it come alive.\n\n#RedHat #Ansible #Automation #RedHatAnsibleAutomation2026`,
+  `Building faster. Operating smarter.\n\nThat’s what Ansible Automation is enabling today.\n\n#RedHat #RedHatAnsible #AnsibleAutomates #RedHatAnsible2026`,
+  `What stood out at Red Hat Ansible Automation 2026 wasn’t just the technology—it was the measurable business impact.\n\nAutomation is no longer just an engineering win—it’s a boardroom conversation.\n\n#RedHat #RedHatAnsible #AnsibleAutomates #RedHatAnsible2026`,
+  `From complexity to clarity—powered by automation.\n\nGreat conversations and real use cases at Red Hat Ansible Automation 2026.\n\n#RedHat #RedHatAnsible #AnsibleAutomates #RedHatAnsible2026`,
+  `Automation at scale. Simplicity in action.\n\nThat’s the core theme at Red Hat Ansible Automation 2026—and it’s powerful to see it come alive.\n\n#RedHat #RedHatAnsible #AnsibleAutomates #RedHatAnsible2026`,
 ];
 
 const EXTRA_POST_IMAGE_CANDIDATES = [
@@ -490,20 +490,22 @@ The image should not look like staged, rather feel realistic.`,
       const aiSelfieDataUrl = await normalizeForAiRequest(selfieDataUrl);
       const selfieBlob = dataUrlToBlob(aiSelfieDataUrl);
       // Stage background is mandatory for this flow.
-      let stageBackgroundBlob: Blob | null = null;
-      const stageBgCandidates = ['/red-hat/bg.jpg', '/red-hat/bg.JPG'];
+      const stageBackgrounds: { blob: Blob; filename: string }[] = [];
+      const stageBgCandidates = ['/red-hat/bg.jpeg', '/red-hat/bgg.jpeg'];
       for (const bgPath of stageBgCandidates) {
         try {
           const bgResp = await fetchWithTimeout(bgPath, { cache: 'no-store' }, 10000);
           if (bgResp.ok) {
-            stageBackgroundBlob = await bgResp.blob();
-            break;
+            stageBackgrounds.push({
+              blob: await bgResp.blob(),
+              filename: bgPath.split('/').pop() || 'bg.jpeg',
+            });
           }
         } catch {
           // continue to next candidate
         }
       }
-      if (!stageBackgroundBlob) {
+      if (stageBackgrounds.length === 0) {
         const bgError = 'Stage background image is missing. Please contact support and try again.';
         setGeneratedImages([
           { dataUrl: null, error: bgError },
@@ -517,10 +519,12 @@ The image should not look like staged, rather feel realistic.`,
 
       const aiPrompts = promptVariants.slice(0, AI_VARIANTS_TO_GENERATE);
       const aiResults: GeneratedImage[] = [];
+      const shuffledBackgrounds = [...stageBackgrounds].sort(() => Math.random() - 0.5);
 
       // Run sequentially for better reliability on mobile networks/devices.
       for (let promptIndex = 0; promptIndex < aiPrompts.length; promptIndex++) {
         const prompt = aiPrompts[promptIndex];
+        const currentBackground = shuffledBackgrounds[promptIndex % shuffledBackgrounds.length];
         const fullPrompt = `${prompt}\n\nUse the person from selfie.jpg as the subject and the scene from bg.jpg as the background. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`;
 
         let finalError = 'Generation failed';
@@ -531,7 +535,7 @@ The image should not look like staged, rather feel realistic.`,
             const form = new FormData();
             form.append('prompt', fullPrompt);
             form.append('image[]', selfieBlob, 'selfie.jpg');
-            form.append('image[]', stageBackgroundBlob, 'bg.jpg');
+            form.append('image[]', currentBackground.blob, currentBackground.filename);
             const geminiResp = await fetchWithTimeout('/api/generate-image-gemini', { method: 'POST', body: form }, 45000);
             if (geminiResp.ok) {
               const data = await geminiResp.json();
@@ -554,7 +558,7 @@ The image should not look like staged, rather feel realistic.`,
             chatForm.append('size', '1024x1024');
             chatForm.append('quality', 'high');
             chatForm.append('image[]', selfieBlob, 'selfie.jpg');
-            chatForm.append('image[]', stageBackgroundBlob, 'bg.jpg');
+            chatForm.append('image[]', currentBackground.blob, currentBackground.filename);
             const chatResp = await fetchWithTimeout('/api/generate-image', { method: 'POST', body: chatForm }, 45000);
             if (chatResp.ok) {
               const chatData = await chatResp.json();
