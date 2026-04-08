@@ -16,7 +16,7 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent/10 hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         // Hero variants
-        hero: "bg-[linear-gradient(135deg,hsl(12_85%_60%)_0%,hsl(25_90%_55%)_100%)] text-accent-foreground font-semibold shadow-[var(--shadow-glow)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]",
+        hero: "gradient-accent text-accent-foreground font-semibold shadow-[var(--shadow-glow)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]",
         heroOutline: "border-2 border-primary bg-transparent text-primary hover:bg-primary hover:text-primary-foreground font-semibold",
         // App flow variants
         action: "bg-[linear-gradient(135deg,hsl(222_47%_20%)_0%,hsl(222_60%_35%)_100%)] text-primary-foreground font-semibold shadow-[var(--shadow-card)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]",

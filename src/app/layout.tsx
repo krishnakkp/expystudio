@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
-import { Red_Hat_Display } from 'next/font/google';
+import { Roboto } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
 import './globals.css';
 import Providers from '@/components/providers';
 
-const redHatDisplay = Red_Hat_Display({
+const roboto = Roboto({
   subsets: ['latin'],
-  variable: '--font-red-hat-display',
+  variable: '--font-roboto',
+  weight: ['300', '400', '500', '700', '900'],
   display: 'swap',
 });
 
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={redHatDisplay.className}>
+      <body className={roboto.className}>
         <Providers>{children}</Providers>
         <Analytics />
       </body>

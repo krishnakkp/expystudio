@@ -40,16 +40,16 @@ const SURVEY_QUESTIONS: { id: string; label: string }[] = [
 ];
 
 const CAPTION_OPTIONS: string[] = [
-  `Building faster. Operating smarter.\n\nThat’s what Ansible Automation is enabling today.\n\n#RedHat #RedHatAnsible #AnsibleAutomates #RedHatAnsible2026`,
-  `What stood out at Red Hat Ansible Automation 2026 wasn’t just the technology—it was the measurable business impact.\n\nAutomation is no longer just an engineering win—it’s a boardroom conversation.\n\n#RedHat #RedHatAnsible #AnsibleAutomates #RedHatAnsible2026`,
-  `From complexity to clarity—powered by automation.\n\nGreat conversations and real use cases at Red Hat Ansible Automation 2026.\n\n#RedHat #RedHatAnsible #AnsibleAutomates #RedHatAnsible2026`,
-  `Automation at scale. Simplicity in action.\n\nThat’s the core theme at Red Hat Ansible Automation 2026—and it’s powerful to see it come alive.\n\n#RedHat #RedHatAnsible #AnsibleAutomates #RedHatAnsible2026`,
+  `Great insights and meaningful conversations at the Dell Technologies Forum, with a clear focus on innovation and business transformation.\n\nThe discussions highlighted how technology continues to shape enterprise resilience and growth.\n\n#DellTechnologiesForum #DellTechForum #DellTechWorld`,
+  `An engaging experience at Dell Technologies Forum, bringing together leaders to explore the future of digital transformation.\n\nStrong emphasis on practical solutions and scalable innovation across industries.\n\n#DellTechnologies #DellTechnologiesForum2026 #DellTechForum`,
+  `Dell Technologies Forum delivered valuable perspectives on navigating today's evolving tech landscape.\n\nThe sessions reinforced the importance of aligning technology with strategic business priorities.\n\n#DellTechWorld #DellTechnologiesForum #DellTechnologiesForum2026`,
+  `Insightful sessions at Dell Technologies Forum showcasing how organizations are leveraging emerging technologies for competitive advantage.\n\nA strong platform for collaboration, learning, and forward-looking ideas.\n\n#DellTechForum #DellTechnologies #DellTechWorld`,
 ];
 
 const EXTRA_POST_IMAGE_CANDIDATES = [
-  ['/red-hat/1.jpg', '/red-hat/1.JPG'],
-  ['/red-hat/2.jpg', '/red-hat/2.JPG'],
-  ['/red-hat/3.jpg', '/red-hat/3.JPG'],
+  ['/dell/1.jpeg', '/dell/1.jpg', '/dell/1.JPG'],
+  ['/dell/2.jpeg', '/dell/2.jpg', '/dell/2.JPG'],
+  ['/dell/3.jpeg', '/dell/3.jpg', '/dell/3.JPG'],
 ] as const;
 const EXTRA_POST_IMAGES = EXTRA_POST_IMAGE_CANDIDATES.map((paths) => paths[0]) as readonly string[];
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
@@ -440,42 +440,34 @@ export function PostGeneratorWizard() {
   }, []);
 
   const promptVariants = useMemo(() => ([
-    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee in a 3/4 angle pose with one hand in pocket, calm expression, standing in front of the stage backdrop.
-Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
-Mid-shot framing from mid-torso to slightly above head.
-Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
-Calm, confident expression with a very minimal, natural smile not exaggerated.
-Sharp focus on eyes, realistic depth of field.
-Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
-Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
-The image should not look like staged, rather feel realistic.`,
-    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee, the person faces the camera straight-on, but the shot is taken from just slightly above eye level - camera angled marginally downward, torso fully forward, no lateral rotation, standing in front of the stage backdrop.
-Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
-Mid-shot framing from mid-torso to slightly above head.
-Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
-Calm, confident expression with a very minimal, natural smile not exaggerated.
-Sharp focus on eyes, realistic depth of field.
-Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
-Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
-The image should not look like staged, rather feel realistic.`,
-    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee, the person faces nearly straight into the camera with a slight turn to the left, chin level, shoulders square, clean, authoritative, minimal movement from center, standing in front of the stage backdrop.
-Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
-Mid-shot framing from mid-torso to slightly above head.
-Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
-Calm, confident expression with a very minimal, natural smile not exaggerated.
-Sharp focus on eyes, realistic depth of field.
-Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
-Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
-The image should not look like staged, rather feel realistic.`,
-    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee, person faces the camera straight-on, chin raised just slightly above neutral - not dramatic, just enough to elongate the neck and project composure, shoulders relaxed, torso forward, standing in front of the stage backdrop.
-Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
-Mid-shot framing from mid-torso to slightly above head.
-Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
-Calm, confident expression with a very minimal, natural smile not exaggerated.
-Sharp focus on eyes, realistic depth of field.
-Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
-Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
-The image should not look like staged, rather feel realistic.`,
+    `Premium, slightly comical corporate poster at Dell Tech Forum Bangalore. Indian professional in sharp suit, confident corporate hero pose, wearing event badge.
+Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
+Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+Minimal text:
+Headline: "Built for the Big Stage"
+Footer: "Dell Tech Forum | Bangalore"
+4K, LinkedIn-style, premium aesthetic.`,
+    `Premium, slightly comical corporate poster at Dell Tech Forum Bangalore. Indian professional in sharp suit, confident leadership pose, wearing event badge.
+Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
+Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+Minimal text:
+Headline: "Designed to Lead"
+Footer: "Dell Tech Forum | Bangalore"
+4K, LinkedIn-style, premium aesthetic.`,
+    `Premium, slightly comical corporate poster at Dell Tech Forum Bangalore. Indian professional in sharp suit, poised networking pose, wearing event badge.
+Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
+Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+Minimal text:
+Headline: "Where Ideas Scale"
+Footer: "Dell Tech Forum | Bangalore"
+4K, LinkedIn-style, premium aesthetic.`,
+    `Premium, slightly comical corporate poster at Dell Tech Forum Bangalore. Indian professional in sharp suit, composed premium portrait pose, wearing event badge.
+Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
+Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+Minimal text:
+Headline: "Future. Built In."
+Footer: "Dell Tech Forum | Bangalore"
+4K, LinkedIn-style, premium aesthetic.`,
   ]), []);
 
   
@@ -488,43 +480,30 @@ The image should not look like staged, rather feel realistic.`,
     try {
       const aiSelfieDataUrl = await normalizeForAiRequest(selfieDataUrl);
       const selfieBlob = dataUrlToBlob(aiSelfieDataUrl);
-      // Stage background is mandatory for this flow.
-      const stageBackgrounds: { blob: Blob; filename: string }[] = [];
-      const stageBgCandidates = ['/red-hat/bg.jpeg', '/red-hat/bgg.jpeg'];
-      for (const bgPath of stageBgCandidates) {
-        try {
-          const bgResp = await fetchWithTimeout(bgPath, { cache: 'no-store' }, 10000);
-          if (bgResp.ok) {
-            stageBackgrounds.push({
-              blob: await bgResp.blob(),
-              filename: bgPath.split('/').pop() || 'bg.jpeg',
-            });
-          }
-        } catch {
-          // continue to next candidate
-        }
-      }
-      if (stageBackgrounds.length === 0) {
-        const bgError = 'Stage background image is missing. Please contact support and try again.';
-        setGeneratedImages([
-          { dataUrl: null, error: bgError },
-          { dataUrl: null, error: bgError },
-          { dataUrl: null, error: bgError },
-          { dataUrl: null, error: bgError },
-        ]);
-        toast({ title: 'Background unavailable', description: bgError, variant: 'destructive' });
-        return;
-      }
+      // Background-reference flow disabled intentionally (prompt-only generation).
+      // const stageBackgrounds: { blob: Blob; filename: string }[] = [];
+      // const stageBgCandidates = ['/dell/bg.jpg'];
+      // for (const bgPath of stageBgCandidates) {
+      //   try {
+      //     const bgResp = await fetchWithTimeout(bgPath, { cache: 'no-store' }, 10000);
+      //     if (bgResp.ok) {
+      //       stageBackgrounds.push({
+      //         blob: await bgResp.blob(),
+      //         filename: bgPath.split('/').pop() || 'bg.jpg',
+      //       });
+      //     }
+      //   } catch {
+      //     // continue to next candidate
+      //   }
+      // }
 
       const aiPrompts = promptVariants.slice(0, AI_VARIANTS_TO_GENERATE);
       const aiResults: GeneratedImage[] = [];
-      const shuffledBackgrounds = [...stageBackgrounds].sort(() => Math.random() - 0.5);
 
       // Run sequentially for better reliability on mobile networks/devices.
       for (let promptIndex = 0; promptIndex < aiPrompts.length; promptIndex++) {
         const prompt = aiPrompts[promptIndex];
-        const currentBackground = shuffledBackgrounds[promptIndex % shuffledBackgrounds.length];
-        const fullPrompt = `${prompt}\n\nUse the person from selfie.jpg as the subject and the scene from bg.jpg as the background. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`;
+        const fullPrompt = `${prompt}\n\nUse the person from selfie.jpg as the subject. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`;
 
         let finalError = 'Generation failed';
         let generatedForPrompt: string | null = null;
@@ -534,7 +513,6 @@ The image should not look like staged, rather feel realistic.`,
             const form = new FormData();
             form.append('prompt', fullPrompt);
             form.append('image[]', selfieBlob, 'selfie.jpg');
-            form.append('image[]', currentBackground.blob, currentBackground.filename);
             const geminiResp = await fetchWithTimeout('/api/generate-image-gemini', { method: 'POST', body: form }, 45000);
             if (geminiResp.ok) {
               const data = await geminiResp.json();
@@ -557,7 +535,6 @@ The image should not look like staged, rather feel realistic.`,
             chatForm.append('size', '1024x1024');
             chatForm.append('quality', 'high');
             chatForm.append('image[]', selfieBlob, 'selfie.jpg');
-            chatForm.append('image[]', currentBackground.blob, currentBackground.filename);
             const chatResp = await fetchWithTimeout('/api/generate-image', { method: 'POST', body: chatForm }, 45000);
             if (chatResp.ok) {
               const chatData = await chatResp.json();
@@ -838,16 +815,16 @@ The image should not look like staged, rather feel realistic.`,
   }, [canGoStep3, surveySubmitting, surveySaved, fullName, email, companyName, survey, toast]);
 
   return (
-    <div className="min-h-[100svh] w-full bg-black bg-[url('/event/bg-dark.png')] bg-cover bg-center bg-fixed flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
+    <div className="min-h-[100svh] w-full bg-[url('/event/bg-dark.png')] bg-cover bg-center bg-fixed flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
       <div className="w-full max-w-md">
-        <Card className="dark relative overflow-hidden border text-card-foreground shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] sm:min-h-0 p-6 bg-card/70 backdrop-blur-md bg-[url('/event/bg-dark.png')] bg-cover bg-center before:content-[''] before:absolute before:inset-0 before:bg-black/60">
-          <div className="relative z-10">
+        <Card className="relative overflow-hidden border text-white [&_.text-muted-foreground]:text-white/85 shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] p-6 bg-[#0076CE] flex flex-col justify-center [&_button[class*='inline-flex']]:[background-image:none] [&_button[class*='inline-flex']]:border [&_button[class*='inline-flex']]:bg-[#0672cb] [&_button[class*='inline-flex']]:border-[#0672cb] [&_button[class*='inline-flex']]:text-white [&_button[class*='inline-flex']:hover]:bg-[#00468b] [&_button[class*='inline-flex']:hover]:border-[#00468b]">
+          <div className="relative z-10 w-full">
           {/* Branding (inside card) */}
           <div className="flex items-center justify-center mb-4">
             <img
-              src="/event/ansible.png"
-              alt="Ansible"
-              className="h-12 w-auto drop-shadow"
+              src="/event/dell.png"
+              alt="Dell Technologies"
+              className="h-8 w-auto drop-shadow"
             />
           </div>
 
@@ -856,12 +833,11 @@ The image should not look like staged, rather feel realistic.`,
             <div className="space-y-5">
               <div>
                 <h1 className="text-3xl font-bold tracking-tight text-center text-white">
-                  Ansible Automates
-                  <br />
-                  2026
+                  Forum 2026
+                  
                 </h1>
                 <p className="text-sm text-muted-foreground mt-3 text-center">
-                  Accept consent and connect your LinkedIn account (required to publish).
+                  Accept consent and connect your LinkedIn account.
                 </p>
               </div>
 
@@ -902,7 +878,12 @@ The image should not look like staged, rather feel realistic.`,
 
               <div className="flex gap-3">
                 <Button
-                  className="w-full h-11"
+                  className={[
+                    'w-full h-11 !border !border-white/70 !text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-md disabled:opacity-100',
+                    canGoStep1
+                      ? '!bg-[#0672cb]/85 hover:!bg-[#00468b]/90'
+                      : '!bg-[#40576e]/75 disabled:!text-white/85',
+                  ].join(' ')}
                   variant="hero"
                   disabled={!canGoStep1}
                   onClick={() => {
@@ -917,7 +898,7 @@ The image should not look like staged, rather feel realistic.`,
                   Accept & Continue <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[12px] text-muted-foreground">
                 You can review terms any time at <a className="underline" href="https://visuallystudios.com/privacy-policy/" target="_blank" rel="noreferrer">Terms</a>.
               </p>
             </div>
@@ -968,7 +949,7 @@ The image should not look like staged, rather feel realistic.`,
                     onClick={startSelfieCamera}
                     type="button"
                   >
-                    <Camera className="w-6 h-6 text-accent mb-3" />
+                    <Camera className="w-6 h-6 text-white mb-3" />
                     <div className="text-sm font-semibold">Take photo</div>
                     <div className="text-xs text-muted-foreground mt-1">Mobile: camera · Laptop: webcam</div>
                   </button>
@@ -977,7 +958,7 @@ The image should not look like staged, rather feel realistic.`,
                     onClick={() => fileInputRef.current?.click()}
                     type="button"
                   >
-                    <Upload className="w-6 h-6 text-accent mb-3" />
+                    <Upload className="w-6 h-6 text-white mb-3" />
                     <div className="text-sm font-semibold">Upload</div>
                     <div className="text-xs text-muted-foreground mt-1">From gallery/files</div>
                   </button>
