@@ -817,7 +817,7 @@ Footer: "Dell Tech Forum | Bangalore"
   return (
     <div className="min-h-[100svh] w-full bg-[url('/event/bg-dark.png')] bg-cover bg-center bg-fixed flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
       <div className="w-full max-w-md">
-        <Card className="relative overflow-hidden border text-white [&_.text-muted-foreground]:text-white/85 shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] p-6 bg-[#0076CE] flex flex-col justify-center [&_button[class*='inline-flex']]:[background-image:none] [&_button[class*='inline-flex']]:border [&_button[class*='inline-flex']]:bg-[#0672cb] [&_button[class*='inline-flex']]:border-[#0672cb] [&_button[class*='inline-flex']]:text-white [&_button[class*='inline-flex']:hover]:bg-[#00468b] [&_button[class*='inline-flex']:hover]:border-[#00468b]">
+        <Card className="relative overflow-hidden border text-white [&_.text-muted-foreground]:text-white/85 shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] p-6 bg-[#0076CE] flex flex-col justify-center [&_button[class*='inline-flex']]:[background-image:none] [&_button[class*='inline-flex']]:border [&_button[class*='inline-flex']]:bg-[#0672cb] [&_button[class*='inline-flex']]:border-white/70 [&_button[class*='inline-flex']]:text-white [&_button[class*='inline-flex']:hover]:bg-[#00468b] [&_button[class*='inline-flex']:hover]:border-white/85 [&_button[class*='inline-flex']:disabled]:!bg-[#40576e] [&_button[class*='inline-flex']:disabled]:!border-white/70 [&_button[class*='inline-flex']:disabled]:!text-white/85">
           <div className="relative z-10 w-full">
           {/* Branding (inside card) */}
           <div className="flex items-center justify-center mb-4">
@@ -990,7 +990,19 @@ Footer: "Dell Tech Forum | Bangalore"
                 <Button variant="heroOutline" className="h-11 rounded-xl" onClick={goBack}>
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
-                <Button variant="hero" className="flex-1 h-11 rounded-xl" disabled={!canGoStep2} onClick={() => setStep(3)}>
+                <Button
+                  variant="hero"
+                  className="flex-1 h-11 rounded-xl"
+                  disabled={!canGoStep2}
+                  onClick={() => {
+                    // Start generation earlier so Step 4 is faster.
+                    if (!step4AutoTriggeredRef.current) {
+                      step4AutoTriggeredRef.current = true;
+                      void generateFourImages();
+                    }
+                    setStep(3);
+                  }}
+                >
                   Continue <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
@@ -1038,15 +1050,15 @@ Footer: "Dell Tech Forum | Bangalore"
               <div className="space-y-3">
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Name</Label>
-                  <Input id="fullName" className="h-11" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" />
+                  <Input id="fullName" className="h-11 bg-white text-slate-900 placeholder:text-slate-400 caret-slate-900" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="company">Company name</Label>
-                  <Input id="company" className="h-11" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Company" />
+                  <Input id="company" className="h-11 bg-white text-slate-900 placeholder:text-slate-400 caret-slate-900" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Company" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" className="h-11" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
+                  <Input id="email" type="email" className="h-11 bg-white text-slate-900 placeholder:text-slate-400 caret-slate-900" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
                   {email.length > 0 && !isValidEmail(email) && (
                     <p className="text-xs text-destructive">Please enter a valid email.</p>
                   )}
@@ -1133,7 +1145,7 @@ Footer: "Dell Tech Forum | Bangalore"
                         </div>
                       )}
                       {isSelected && (
-                        <div className="absolute top-2 right-2 w-8 h-8 rounded-full gradient-accent flex items-center justify-center text-white">
+                        <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/75 flex items-center justify-center text-white">
                           <Check className="w-4 h-4" />
                         </div>
                       )}
@@ -1201,7 +1213,7 @@ Footer: "Dell Tech Forum | Bangalore"
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-sm whitespace-pre-line">{cap}</p>
                         {selected && (
-                          <span className="shrink-0 w-8 h-8 rounded-full gradient-accent flex items-center justify-center text-white">
+                          <span className="shrink-0 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center text-white">
                             <Check className="w-4 h-4" />
                           </span>
                         )}
@@ -1257,7 +1269,7 @@ Footer: "Dell Tech Forum | Bangalore"
                 </div>
 
                 {/* Hero banner */}
-                <div className="w-full aspect-[16/9] bg-neutral-100">
+                <div className="w-full aspect-[16/9] bg-neutral-100 rounded-xl overflow-hidden">
                   {selectedImageIndex !== null && generatedImages[selectedImageIndex]?.dataUrl ? (
                     <img
                       src={generatedImages[selectedImageIndex]!.dataUrl!}

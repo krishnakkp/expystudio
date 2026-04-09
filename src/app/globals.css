@@ -116,6 +116,18 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-family: var(--font-roboto), 'Roboto', system-ui, sans-serif;
   }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus {
+    -webkit-text-fill-color: #0f172a;
+    box-shadow: 0 0 0px 1000px #ffffff inset;
+    transition: background-color 9999s ease-out 0s;
+    caret-color: #0f172a;
+  }
 }
 
 @layer utilities {
