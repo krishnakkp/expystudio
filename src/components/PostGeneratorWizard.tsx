@@ -274,8 +274,9 @@ export function PostGeneratorWizard() {
     { dataUrl: null },
     { dataUrl: null },
   ]);
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [selectedImageIndices, setSelectedImageIndices] = useState<number[]>([]);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
+  const [previewPostSlideIndex, setPreviewPostSlideIndex] = useState(0);
 
   // Step 5
   const [selectedCaptionIndex, setSelectedCaptionIndex] = useState<number | null>(null);
@@ -338,7 +339,7 @@ export function PostGeneratorWizard() {
   const canGoStep2 = Boolean(selfieDataUrl);
   const surveyComplete = SURVEY_QUESTIONS.every((q) => (survey[q.id] ?? 0) > 0);
   const canGoStep3 = surveyComplete && fullName.trim().length > 0 && companyName.trim().length > 0 && isValidEmail(email);
-  const canGoStep4 = selectedImageIndex !== null && generatedImages[selectedImageIndex]?.dataUrl;
+  const canGoStep4 = selectedImageIndices.length > 0 && Boolean(generatedImages[selectedImageIndices[0]]?.dataUrl);
   const canGoStep5 = selectedCaptionIndex !== null;
 
   const goNext = useCallback(() => {
@@ -360,7 +361,7 @@ export function PostGeneratorWizard() {
     setSurveySaved(false);
     setIsGenerating(false);
     setGeneratedImages([{ dataUrl: null }, { dataUrl: null }, { dataUrl: null }, { dataUrl: null }]);
-    setSelectedImageIndex(null);
+    setSelectedImageIndices([]);
     setPreviewImageIndex(null);
     setSelectedCaptionIndex(null);
     selfieStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -440,42 +441,34 @@ export function PostGeneratorWizard() {
   }, []);
 
   const promptVariants = useMemo(() => ([
-    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee in a 3/4 angle pose with one hand in pocket, calm expression, standing in front of the stage backdrop.
-Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
-Mid-shot framing from mid-torso to slightly above head.
-Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
-Calm, confident expression with a very minimal, natural smile not exaggerated.
-Sharp focus on eyes, realistic depth of field.
-Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
-Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
-The image should not look like staged, rather feel realistic.`,
-    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee, the person faces the camera straight-on, but the shot is taken from just slightly above eye level - camera angled marginally downward, torso fully forward, no lateral rotation, standing in front of the stage backdrop.
-Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
-Mid-shot framing from mid-torso to slightly above head.
-Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
-Calm, confident expression with a very minimal, natural smile not exaggerated.
-Sharp focus on eyes, realistic depth of field.
-Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
-Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
-The image should not look like staged, rather feel realistic.`,
-    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee, the person faces nearly straight into the camera with a slight turn to the left, chin level, shoulders square, clean, authoritative, minimal movement from center, standing in front of the stage backdrop.
-Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
-Mid-shot framing from mid-torso to slightly above head.
-Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
-Calm, confident expression with a very minimal, natural smile not exaggerated.
-Sharp focus on eyes, realistic depth of field.
-Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
-Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
-The image should not look like staged, rather feel realistic.`,
-    `Use the provided stage background image exactly as the scene. Place the same person as an event attendee, person faces the camera straight-on, chin raised just slightly above neutral - not dramatic, just enough to elongate the neck and project composure, shoulders relaxed, torso forward, standing in front of the stage backdrop.
-Ultra-realistic mid-shot studio photograph of the same male subject from the reference images, preserving exact facial structure, head shape, hairline, skin tone, and age.
-Mid-shot framing from mid-torso to slightly above head.
-Natural skin texture with visible pores and realistic highlights, no de-aging, no heavy retouching.
-Calm, confident expression with a very minimal, natural smile not exaggerated.
-Sharp focus on eyes, realistic depth of field.
-Shot on full-frame camera, 85mm lens, f/4, ISO 100, professional studio flash.
-Ultra-high resolution, photorealistic, international corporate executive portrait. 16:9 aspect ratio.
-The image should not look like staged, rather feel realistic.`,
+    `Premium, slightly comical corporate poster at Red Hat Ansible Delhi. Indian professional in sharp suit, confident corporate hero pose, wearing event badge.
+Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
+Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+Minimal text:
+Headline: "Built for the Big Stage"
+Footer: "Red Hat Ansible 2026 | Delhi"
+4K, LinkedIn-style, premium aesthetic.`,
+    `Premium, slightly comical corporate poster at Red Hat Ansible Delhi. Indian professional in sharp suit, confident leadership pose, wearing event badge.
+Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
+Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+Minimal text:
+Headline: "Designed to Lead"
+Footer: "Red Hat Ansible 2026 | Delhi"
+4K, LinkedIn-style, premium aesthetic.`,
+    `Premium, slightly comical corporate poster at Red Hat Ansible Delhi. Indian professional in sharp suit, poised networking pose, wearing event badge.
+Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
+Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+Minimal text:
+Headline: "Where Ideas Scale"
+Footer: "Red Hat Ansible 2026 | Delhi"
+4K, LinkedIn-style, premium aesthetic.`,
+    `Premium, slightly comical corporate poster at Red Hat Ansible Delhi. Indian professional in sharp suit, composed premium portrait pose, wearing event badge.
+Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
+Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+Minimal text:
+Headline: "Future. Built In."
+Footer: "Red Hat Ansible 2026 | Delhi"
+4K, LinkedIn-style, premium aesthetic.`,
   ]), []);
 
   
@@ -483,8 +476,8 @@ The image should not look like staged, rather feel realistic.`,
   const generateFourImages = useCallback(async () => {
     if (!selfieDataUrl) return;
     setIsGenerating(true);
-    setGeneratedImages([{ dataUrl: null }, { dataUrl: null }, { dataUrl: null }, { dataUrl: null }]);
-    setSelectedImageIndex(null);
+      setGeneratedImages([{ dataUrl: null }, { dataUrl: null }, { dataUrl: null }, { dataUrl: null }]);
+      setSelectedImageIndices([]);
     try {
       const aiSelfieDataUrl = await normalizeForAiRequest(selfieDataUrl);
       const selfieBlob = dataUrlToBlob(aiSelfieDataUrl);
@@ -608,7 +601,7 @@ The image should not look like staged, rather feel realistic.`,
       if (okCount > 0) {
         setGeneratedImages(next);
         const firstOk = next.findIndex((x) => Boolean(x.dataUrl));
-        if (firstOk >= 0) setSelectedImageIndex(firstOk);
+        if (firstOk >= 0) setSelectedImageIndices([firstOk]);
         if (aiOkCount === 0) {
           const firstErr = aiResults.find((x) => x.error)?.error;
           toast({
@@ -668,10 +661,41 @@ The image should not look like staged, rather feel realistic.`,
     window.location.href = '/api/linkedin/auth';
   }, []);
 
-  const getSelectedImageDataUrl = useCallback(() => {
-    if (selectedImageIndex === null) return null;
-    return generatedImages[selectedImageIndex]?.dataUrl ?? null;
-  }, [generatedImages, selectedImageIndex]);
+  const getSelectedImageDataUrls = useCallback(() => {
+    if (selectedImageIndices.length === 0) return [];
+    const first = generatedImages[selectedImageIndices[0]]?.dataUrl ?? null;
+    return first ? [first] : [];
+  }, [generatedImages, selectedImageIndices]);
+
+  const previewGeneratedUrls = useMemo(
+    () => getSelectedImageDataUrls(),
+    [getSelectedImageDataUrls]
+  );
+  const previewPostImageUrls = useMemo(
+    () => [...previewGeneratedUrls, ...EXTRA_POST_IMAGES],
+    [previewGeneratedUrls]
+  );
+
+  useEffect(() => {
+    if (step !== 6) return;
+    setPreviewPostSlideIndex(0);
+  }, [step, previewPostImageUrls.length]);
+
+  useEffect(() => {
+    setPreviewPostSlideIndex((prev) => {
+      if (previewPostImageUrls.length === 0) return 0;
+      return Math.min(prev, previewPostImageUrls.length - 1);
+    });
+  }, [previewPostImageUrls.length]);
+
+  useEffect(() => {
+    if (step !== 6) return;
+    if (previewPostImageUrls.length <= 1) return;
+    const id = window.setInterval(() => {
+      setPreviewPostSlideIndex((prev) => (prev + 1) % previewPostImageUrls.length);
+    }, 2800);
+    return () => window.clearInterval(id);
+  }, [step, previewPostImageUrls.length]);
 
   const publish = useCallback(async () => {
     if (linkedinPosting || linkedinPublishLockRef.current) return;
@@ -689,8 +713,10 @@ The image should not look like staged, rather feel realistic.`,
       return;
     }
 
-    const selected = getSelectedImageDataUrl() || selfieDataUrl;
-    if (!selected) {
+    const selectedUrls = getSelectedImageDataUrls();
+    const selectedFallback = selfieDataUrl ? [selfieDataUrl] : [];
+    const imagesForPost = selectedUrls.length > 0 ? selectedUrls : selectedFallback;
+    if (imagesForPost.length === 0) {
       toast({ title: 'Missing image', description: 'Please select an image first.', variant: 'destructive' });
       return;
     }
@@ -698,8 +724,10 @@ The image should not look like staged, rather feel realistic.`,
     setLinkedinPosting(true);
     setLinkedinProgress('Preparing images…');
     try {
-      const imagesToUpload: { blob: Blob; filename: string }[] = [];
-      imagesToUpload.push({ blob: dataUrlToBlob(selected), filename: 'selected.jpg' });
+      const imagesToUpload: { blob: Blob; filename: string }[] = imagesForPost.map((url, i) => ({
+        blob: dataUrlToBlob(url),
+        filename: `selected-${i + 1}.jpg`,
+      }));
 
       // Upload each image to LinkedIn to get asset URNs.
       const assetUrns: string[] = [];
@@ -719,7 +747,7 @@ The image should not look like staged, rather feel realistic.`,
 
       // 2) Upload the 3 large public images server-side to avoid the 10MB request limit
       for (let i = 0; i < EXTRA_POST_IMAGES.length; i++) {
-        setLinkedinProgress(`Uploading image ${i + 2} of ${EXTRA_POST_IMAGES.length + 1}…`);
+        setLinkedinProgress(`Uploading image ${imagesToUpload.length + i + 1} of ${imagesToUpload.length + EXTRA_POST_IMAGES.length}…`);
         let uploaded = false;
         let lastError = `HTTP 500`;
         const pathCandidates = EXTRA_POST_IMAGE_CANDIDATES[i] ?? [EXTRA_POST_IMAGES[i]];
@@ -779,7 +807,7 @@ The image should not look like staged, rather feel realistic.`,
     canGoStep4,
     canGoStep5,
     connectLinkedIn,
-    getSelectedImageDataUrl,
+    getSelectedImageDataUrls,
     linkedinConnected,
     selfieDataUrl,
     selectedCaption,
@@ -1009,7 +1037,18 @@ The image should not look like staged, rather feel realistic.`,
                 <Button variant="heroOutline" className="h-11 rounded-xl" onClick={goBack}>
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
-                <Button variant="hero" className="flex-1 h-11 rounded-xl" disabled={!canGoStep2} onClick={() => setStep(3)}>
+                <Button
+                  variant="hero"
+                  className="flex-1 h-11 rounded-xl"
+                  disabled={!canGoStep2}
+                  onClick={() => {
+                    if (!step4AutoTriggeredRef.current) {
+                      step4AutoTriggeredRef.current = true;
+                      void generateFourImages();
+                    }
+                    setStep(3);
+                  }}
+                >
                   Continue <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
@@ -1108,7 +1147,7 @@ The image should not look like staged, rather feel realistic.`,
 
               <div className="grid grid-cols-2 gap-3">
                 {generatedImages.map((img, i) => {
-                  const isSelected = selectedImageIndex === i;
+                  const isSelected = selectedImageIndices.includes(i);
                   return (
                     <button
                       key={i}
@@ -1117,9 +1156,12 @@ The image should not look like staged, rather feel realistic.`,
                         'relative overflow-hidden rounded-2xl border bg-secondary/20 aspect-square transition-all',
                         isSelected ? 'border-accent ring-2 ring-accent/40' : 'border-border/60 hover:border-accent/50',
                       ].join(' ')}
-                      onClick={() => img.dataUrl && setSelectedImageIndex(i)}
+                      onClick={() => {
+                        if (!img.dataUrl) return;
+                        setSelectedImageIndices([i]);
+                      }}
                       disabled={!img.dataUrl || isGenerating}
-                      aria-label={`Select image ${i + 1}`}
+                      aria-label={`Toggle image ${i + 1}`}
                     >
                       {img.dataUrl && (
                         <button
@@ -1275,44 +1317,113 @@ The image should not look like staged, rather feel realistic.`,
                   <p className="text-sm whitespace-pre-line">{selectedCaption || 'Select a caption to preview.'}</p>
                 </div>
 
-                {/* Hero banner */}
-                <div className="w-full aspect-[16/9] bg-neutral-100">
-                  {selectedImageIndex !== null && generatedImages[selectedImageIndex]?.dataUrl ? (
-                    <img
-                      src={generatedImages[selectedImageIndex]!.dataUrl!}
-                      alt="Hero"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-neutral-500">
-                      No hero image selected
+                {/* Selected generated + generic images preview */}
+                <div className="p-4 pt-0 space-y-3">
+                  <div className="text-xs text-neutral-600">
+                    {previewGeneratedUrls.length + EXTRA_POST_IMAGES.length} images will be posted
+                  </div>
+
+                  <div className="relative w-full aspect-[16/9] rounded-xl overflow-hidden border border-neutral-200 bg-neutral-100">
+                    {previewPostImageUrls.length > 0 ? (
+                      <img
+                        src={previewPostImageUrls[previewPostSlideIndex]}
+                        alt={`Preview ${previewPostSlideIndex + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          if (!img.dataset.fallbackTried) {
+                            img.dataset.fallbackTried = '1';
+                            img.src = '/placeholder.svg';
+                            return;
+                          }
+                          img.onerror = null;
+                          img.src = '/placeholder.svg';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs text-neutral-500">
+                        No images selected
+                      </div>
+                    )}
+
+                    {previewPostImageUrls.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/55 hover:bg-black/70 text-white flex items-center justify-center"
+                          onClick={() =>
+                            setPreviewPostSlideIndex((prev) =>
+                              prev === 0 ? previewPostImageUrls.length - 1 : prev - 1
+                            )
+                          }
+                          aria-label="Previous preview image"
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/55 hover:bg-black/70 text-white flex items-center justify-center"
+                          onClick={() =>
+                            setPreviewPostSlideIndex((prev) =>
+                              (prev + 1) % previewPostImageUrls.length
+                            )
+                          }
+                          aria-label="Next preview image"
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {previewPostImageUrls.length > 1 && (
+                    <div className="flex items-center justify-center gap-1.5">
+                      {previewPostImageUrls.map((_, i) => (
+                        <button
+                          key={`dot-${i}`}
+                          type="button"
+                          onClick={() => setPreviewPostSlideIndex(i)}
+                          className={[
+                            'w-2 h-2 rounded-full transition-colors',
+                            i === previewPostSlideIndex ? 'bg-neutral-900' : 'bg-neutral-300 hover:bg-neutral-400',
+                          ].join(' ')}
+                          aria-label={`Go to preview image ${i + 1}`}
+                        />
+                      ))}
                     </div>
                   )}
-                </div>
 
-                {/* 3 images below */}
-                <div className="p-4">
-                  <div className="grid grid-cols-3 gap-2">
-                    {EXTRA_POST_IMAGES.map((src, i) => (
-                      <div key={i} className="aspect-square rounded-lg overflow-hidden bg-neutral-100">
-                        <img
-                          src={src}
-                          alt={`Extra ${i + 1}`}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const img = e.currentTarget;
-                            if (!img.dataset.fallbackTried) {
-                              img.dataset.fallbackTried = '1';
-                              img.src = `/red-hat/${i + 1}.JPG`;
-                              return;
-                            }
-                            img.onerror = null;
-                            img.src = '/placeholder.svg';
-                          }}
-                        />
+                  {previewPostImageUrls.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <div className="flex items-center gap-2 min-w-max pb-1">
+                        {previewPostImageUrls.map((src, i) => (
+                          <button
+                            key={`thumb-${i}`}
+                            type="button"
+                            onClick={() => setPreviewPostSlideIndex(i)}
+                            className={[
+                              'relative w-20 sm:w-24 aspect-video rounded-md overflow-hidden border transition-colors shrink-0',
+                              i === previewPostSlideIndex
+                                ? 'border-neutral-900 ring-2 ring-neutral-900/20'
+                                : 'border-neutral-300 hover:border-neutral-500',
+                            ].join(' ')}
+                            aria-label={`Preview thumbnail ${i + 1}`}
+                          >
+                            <img
+                              src={src}
+                              alt={`Thumbnail ${i + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const img = e.currentTarget;
+                                img.onerror = null;
+                                img.src = '/placeholder.svg';
+                              }}
+                            />
+                          </button>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
