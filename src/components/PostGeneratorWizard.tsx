@@ -738,7 +738,13 @@ Footer: "Red Hat Ansible 2026 | Delhi"
         form.append('image', imagesToUpload[i].blob, imagesToUpload[i].filename);
         const upResp = await fetch('/api/linkedin/upload-image', { method: 'POST', body: form });
         if (!upResp.ok) {
-          const { error } = await upResp.json().catch(() => ({ error: `HTTP ${upResp.status}` }));
+          const { error, reconnectRequired } = await upResp
+            .json()
+            .catch(() => ({ error: `HTTP ${upResp.status}`, reconnectRequired: false }));
+          if (reconnectRequired) {
+            setLinkedinConnected(false);
+            throw new Error('Your LinkedIn session was revoked. Please reconnect and try again.');
+          }
           throw new Error(error);
         }
         const { assetUrn } = await upResp.json();
@@ -758,7 +764,13 @@ Footer: "Red Hat Ansible 2026 | Delhi"
             body: JSON.stringify({ publicPath }),
           });
           if (!upResp.ok) {
-            const { error } = await upResp.json().catch(() => ({ error: `HTTP ${upResp.status}` }));
+            const { error, reconnectRequired } = await upResp
+              .json()
+              .catch(() => ({ error: `HTTP ${upResp.status}`, reconnectRequired: false }));
+            if (reconnectRequired) {
+              setLinkedinConnected(false);
+              throw new Error('Your LinkedIn session was revoked. Please reconnect and try again.');
+            }
             lastError = error;
             continue;
           }
@@ -788,7 +800,13 @@ Footer: "Red Hat Ansible 2026 | Delhi"
         });
       }
       if (!postResp.ok) {
-        const { error } = await postResp.json().catch(() => ({ error: `HTTP ${postResp.status}` }));
+        const { error, reconnectRequired } = await postResp
+          .json()
+          .catch(() => ({ error: `HTTP ${postResp.status}`, reconnectRequired: false }));
+        if (reconnectRequired) {
+          setLinkedinConnected(false);
+          throw new Error('Your LinkedIn session was revoked. Please reconnect and try again.');
+        }
         throw new Error(error);
       }
       const postData = await postResp.json();
