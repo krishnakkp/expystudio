@@ -440,34 +440,11 @@ export function PostGeneratorWizard() {
   }, []);
 
   const promptVariants = useMemo(() => ([
-    `Premium, slightly comical corporate poster at Dell Tech Forum Bangalore. Indian professional in sharp suit, confident corporate hero pose, wearing event badge.
-Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
-Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
-Minimal text:
-Headline: "Built for the Big Stage"
-Footer: "Dell Tech Forum | Bangalore"
-4K, LinkedIn-style, premium aesthetic.`,
-    `Premium, slightly comical corporate poster at Dell Tech Forum Bangalore. Indian professional in sharp suit, confident leadership pose, wearing event badge.
-Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
-Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
-Minimal text:
-Headline: "Designed to Lead"
-Footer: "Dell Tech Forum | Bangalore"
-4K, LinkedIn-style, premium aesthetic.`,
-    `Premium, slightly comical corporate poster at Dell Tech Forum Bangalore. Indian professional in sharp suit, poised networking pose, wearing event badge.
-Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
-Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
-Minimal text:
-Headline: "Where Ideas Scale"
-Footer: "Dell Tech Forum | Bangalore"
-4K, LinkedIn-style, premium aesthetic.`,
-    `Premium, slightly comical corporate poster at Dell Tech Forum Bangalore. Indian professional in sharp suit, composed premium portrait pose, wearing event badge.
-Modern tech conference background, blue-toned lighting, LED screens, blurred crowd. Subtle humor via visuals: floating AI/cloud icons, rising graphs, dramatic spotlight, coffee cup, exaggerated networking in background.
-Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
-Minimal text:
-Headline: "Future. Built In."
-Footer: "Dell Tech Forum | Bangalore"
-4K, LinkedIn-style, premium aesthetic.`,
+    'Create a professional LinkedIn-style photo at a tech conference keynote stage. Keep it photorealistic, phone-camera look, natural lighting.',
+    'Create a professional LinkedIn-style networking photo in a conference lobby. Photorealistic, candid, realistic lighting and perspective.',
+    'Create a professional LinkedIn-style expo-floor photo near booths and banners. Photorealistic, phone-camera look, realistic background.',
+    'Create a professional LinkedIn-style photo in front of an event backdrop (step-and-repeat). Photorealistic, crisp, realistic shadows.',
+
   ]), []);
 
   
