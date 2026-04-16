@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clearLinkedInCookies, isLinkedInRevokedToken } from '../_shared';
 
 export async function POST(request: NextRequest) {
   const token = request.cookies.get('li_token')?.value;
@@ -34,10 +35,15 @@ export async function POST(request: NextRequest) {
 
   if (!regResp.ok) {
     const errText = await regResp.text();
-    return NextResponse.json(
-      { error: `LinkedIn registerUpload failed (${regResp.status}): ${errText}` },
-      { status: regResp.status },
-    );
+    if (isLinkedInRevokedToken(regResp.status, errText)) {
+      const response = NextResponse.json(
+        { error: 'LinkedIn access was revoked. Please reconnect LinkedIn.', reconnectRequired: true },
+        { status: 401 },
+      );
+      clearLinkedInCookies(response);
+      return response;
+    }
+    return NextResponse.json({ error: `LinkedIn registerUpload failed (${regResp.status}): ${errText}` }, { status: regResp.status });
   }
 
   const regData = await regResp.json();
@@ -66,10 +72,15 @@ export async function POST(request: NextRequest) {
 
   if (!uploadResp.ok) {
     const errText = await uploadResp.text();
-    return NextResponse.json(
-      { error: `LinkedIn image upload failed (${uploadResp.status}): ${errText}` },
-      { status: uploadResp.status },
-    );
+    if (isLinkedInRevokedToken(uploadResp.status, errText)) {
+      const response = NextResponse.json(
+        { error: 'LinkedIn access was revoked. Please reconnect LinkedIn.', reconnectRequired: true },
+        { status: 401 },
+      );
+      clearLinkedInCookies(response);
+      return response;
+    }
+    return NextResponse.json({ error: `LinkedIn image upload failed (${uploadResp.status}): ${errText}` }, { status: uploadResp.status });
   }
 
   return NextResponse.json({ assetUrn });

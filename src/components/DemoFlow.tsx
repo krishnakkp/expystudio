@@ -462,7 +462,13 @@ function DemoFlowInner() {
           form.append('image', blob, `photo-${n}.png`);
           const uploadResp = await fetch('/api/linkedin/upload-image', { method: 'POST', body: form });
           if (!uploadResp.ok) {
-            const { error } = await uploadResp.json().catch(() => ({ error: `HTTP ${uploadResp.status}` }));
+            const { error, reconnectRequired } = await uploadResp
+              .json()
+              .catch(() => ({ error: `HTTP ${uploadResp.status}`, reconnectRequired: false }));
+            if (reconnectRequired) {
+              setLinkedinConnected(false);
+              throw new Error('Your LinkedIn session was revoked. Please reconnect and try again.');
+            }
             throw new Error(`Image upload failed: ${error}`);
           }
           const { assetUrn } = await uploadResp.json();
@@ -477,7 +483,13 @@ function DemoFlowInner() {
           body: JSON.stringify({ caption, assetUrns }),
         });
         if (!postResp.ok) {
-          const { error } = await postResp.json().catch(() => ({ error: `HTTP ${postResp.status}` }));
+          const { error, reconnectRequired } = await postResp
+            .json()
+            .catch(() => ({ error: `HTTP ${postResp.status}`, reconnectRequired: false }));
+          if (reconnectRequired) {
+            setLinkedinConnected(false);
+            throw new Error('Your LinkedIn session was revoked. Please reconnect and try again.');
+          }
           throw new Error(error);
         }
 
