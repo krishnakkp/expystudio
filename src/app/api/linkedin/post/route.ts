@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clearLinkedInCookies, isLinkedInRevokedToken } from '../_shared';
 
 export async function POST(request: NextRequest) {
   const token = request.cookies.get('li_token')?.value;
@@ -42,10 +43,15 @@ export async function POST(request: NextRequest) {
 
   if (!postResp.ok) {
     const errText = await postResp.text();
-    return NextResponse.json(
-      { error: `LinkedIn ugcPosts failed (${postResp.status}): ${errText}` },
-      { status: postResp.status },
-    );
+    if (isLinkedInRevokedToken(postResp.status, errText)) {
+      const response = NextResponse.json(
+        { error: 'LinkedIn access was revoked. Please reconnect LinkedIn.', reconnectRequired: true },
+        { status: 401 },
+      );
+      clearLinkedInCookies(response);
+      return response;
+    }
+    return NextResponse.json({ error: `LinkedIn ugcPosts failed (${postResp.status}): ${errText}` }, { status: postResp.status });
   }
 
   // LinkedIn may return the created URN in either response body (`id`)
