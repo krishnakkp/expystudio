@@ -1,14 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const keys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_2,
+    process.env.GEMINI_API_KEY_3,
+    process.env.GEMINI_API_KEY_4,
+  ]
+    .map((k) => k?.trim())
+    .filter(Boolean) as string[];
+
+  if (keys.length === 0) {
     return NextResponse.json({ error: 'Gemini API key not configured' }, { status: 500 });
   }
 
   const formData = await request.formData();
   const prompt = formData.get('prompt') as string;
   const images = formData.getAll('image[]') as File[];
+  const keyIndexRaw = formData.get('keyIndex') as string | null;
+  const requestedKeyIndex = keyIndexRaw ? Number.parseInt(keyIndexRaw, 10) : NaN;
+  const keyIndex = Number.isFinite(requestedKeyIndex) ? requestedKeyIndex : -1;
 
   // Convert uploaded images to base64 inline_data parts
   const imageParts = await Promise.all(
@@ -58,7 +69,14 @@ export async function POST(request: NextRequest) {
     'gemini-3-pro-image-preview',
   ];
 
-  const callModel = async (model: string) => {
+  const pickKey = (idx: number) => {
+    if (keys.length === 0) return '';
+    if (idx >= 0 && idx < keys.length) return keys[idx];
+    // deterministic-ish spread when caller doesn't specify a keyIndex
+    return keys[Math.abs(Date.now()) % keys.length];
+  };
+
+  const callModel = async (model: string, apiKeyToUse: string) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60_000);
@@ -67,7 +85,7 @@ export async function POST(request: NextRequest) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
+          'x-goog-api-key': apiKeyToUse,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -81,10 +99,12 @@ export async function POST(request: NextRequest) {
   let lastErrText = '';
   let lastStatus = 500;
   let usedModel = preferredModel;
+  let usedKeyIndex = keyIndex;
 
   for (const model of modelFallbacks) {
     usedModel = model;
-    resp = await callModel(model);
+    const apiKeyToUse = pickKey(usedKeyIndex);
+    resp = await callModel(model, apiKeyToUse);
     lastStatus = resp.status;
     if (resp.ok) break;
     lastErrText = await resp.text().catch(() => '');
@@ -93,10 +113,11 @@ export async function POST(request: NextRequest) {
     break;
   }
 
-  // Retry once on rate limit
+  // Retry once on rate limit (rotate key)
   if (resp && resp.status === 429) {
     await new Promise((r) => setTimeout(r, 10_000));
-    resp = await callModel(usedModel);
+    usedKeyIndex = keys.length > 0 ? (Math.max(usedKeyIndex, 0) + 1) % keys.length : usedKeyIndex;
+    resp = await callModel(usedModel, pickKey(usedKeyIndex));
   }
 
   if (!resp || !resp.ok) {

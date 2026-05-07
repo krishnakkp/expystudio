@@ -475,22 +475,27 @@ export function PostGeneratorWizard() {
       // }
 
       const aiPrompts = promptVariants.slice(0, AI_VARIANTS_TO_GENERATE);
-      const aiResults: GeneratedImage[] = [];
 
-      // Run sequentially for better reliability on mobile networks/devices.
-      for (let promptIndex = 0; promptIndex < aiPrompts.length; promptIndex++) {
-        const prompt = aiPrompts[promptIndex];
+      const runOne = async (prompt: string, promptIndex: number) => {
         const fullPrompt = `${prompt}\n\nUse the person from selfie.jpg as the subject. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`;
 
         let finalError = 'Generation failed';
         let generatedForPrompt: string | null = null;
+
         for (let attempt = 0; attempt < 2 && !generatedForPrompt; attempt++) {
           try {
-            // Try Gemini first
+            // Try Gemini first (spread load across 4 keys)
             const form = new FormData();
             form.append('prompt', fullPrompt);
+            form.append('keyIndex', String(promptIndex % 4));
             form.append('image[]', selfieBlob, 'selfie.jpg');
-            const geminiResp = await fetchWithTimeout('/api/generate-image-gemini', { method: 'POST', body: form }, 45000);
+
+            const geminiResp = await fetchWithTimeout(
+              '/api/generate-image-gemini',
+              { method: 'POST', body: form },
+              45000
+            );
+
             if (geminiResp.ok) {
               const data = await geminiResp.json();
               const b64 = data?.data?.[0]?.b64_json as string | undefined;
@@ -512,7 +517,13 @@ export function PostGeneratorWizard() {
             chatForm.append('size', '1024x1024');
             chatForm.append('quality', 'high');
             chatForm.append('image[]', selfieBlob, 'selfie.jpg');
-            const chatResp = await fetchWithTimeout('/api/generate-image', { method: 'POST', body: chatForm }, 45000);
+
+            const chatResp = await fetchWithTimeout(
+              '/api/generate-image',
+              { method: 'POST', body: chatForm },
+              45000
+            );
+
             if (chatResp.ok) {
               const chatData = await chatResp.json();
               const chatB64 = chatData?.data?.[0]?.b64_json as string | undefined;
@@ -529,28 +540,34 @@ export function PostGeneratorWizard() {
           } catch (err) {
             finalError = getFriendlyGenerationError(getErrorMessage(err));
           }
+
           if (!generatedForPrompt && attempt === 0) {
             await new Promise((r) => setTimeout(r, 700));
           }
         }
 
         if (generatedForPrompt) {
-          aiResults.push({ dataUrl: generatedForPrompt });
           setGeneratedImages((prev) => {
             const next = [...prev];
             next[promptIndex] = { dataUrl: generatedForPrompt };
             return next;
           });
-        } else {
-          const failed = { dataUrl: null, error: finalError };
-          aiResults.push(failed);
-          setGeneratedImages((prev) => {
-            const next = [...prev];
-            next[promptIndex] = failed;
-            return next;
-          });
+          return { dataUrl: generatedForPrompt } as GeneratedImage;
         }
-      }
+
+        const failed = { dataUrl: null, error: finalError } as GeneratedImage;
+        setGeneratedImages((prev) => {
+          const next = [...prev];
+          next[promptIndex] = failed;
+          return next;
+        });
+        return failed;
+      };
+
+      const settled = await Promise.allSettled(aiPrompts.map((p, i) => runOne(p, i)));
+      const aiResults: GeneratedImage[] = settled.map((r) =>
+        r.status === 'fulfilled' ? r.value : { dataUrl: null, error: getFriendlyGenerationError(getErrorMessage(r.reason)) }
+      );
 
       const next: GeneratedImage[] = Array.from({ length: 4 }).map((_, i) => {
         const aiResult = aiResults[i] ?? null;
@@ -812,12 +829,12 @@ export function PostGeneratorWizard() {
   return (
     <div className="min-h-[100svh] w-full bg-[url('/event/bg-dark.png')] bg-cover bg-center bg-fixed flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
       <div className="w-full max-w-md">
-        <Card className="relative overflow-hidden border text-white [&_.text-muted-foreground]:text-white/85 shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] p-6 bg-[#0076CE] flex flex-col justify-center [&_button[class*='inline-flex']]:[background-image:none] [&_button[class*='inline-flex']]:border [&_button[class*='inline-flex']]:bg-[#0672cb] [&_button[class*='inline-flex']]:border-white/70 [&_button[class*='inline-flex']]:text-white [&_button[class*='inline-flex']:hover]:bg-[#00468b] [&_button[class*='inline-flex']:hover]:border-white/85 [&_button[class*='inline-flex']:disabled]:!bg-[#40576e] [&_button[class*='inline-flex']:disabled]:!border-white/70 [&_button[class*='inline-flex']:disabled]:!text-white/85">
+        <Card className="relative overflow-hidden border text-foreground [&_.text-muted-foreground]:text-foreground/80 shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] p-6 bg-[#F1E1ED] flex flex-col justify-center">
           <div className="relative z-10 w-full">
           {/* Branding (inside card) */}
           <div className="flex items-center justify-center mb-4">
             <img
-              src="/event/dell.png"
+              src="/event/lenovo.png"
               alt="Dell Technologies"
               className="h-8 w-auto drop-shadow"
             />
@@ -827,7 +844,7 @@ export function PostGeneratorWizard() {
           {step === 1 && (
             <div className="space-y-5">
               <div>
-                <h1 className="text-3xl font-bold tracking-tight text-center text-white">
+                <h1 className="text-3xl font-bold tracking-tight text-center text-foreground">
                   Forum 2026
                   
                 </h1>
@@ -836,14 +853,14 @@ export function PostGeneratorWizard() {
                 </p>
               </div>
 
-              <label className="flex items-start gap-3 rounded-2xl border border-border/60 bg-secondary/30 p-4 cursor-pointer select-none">
+              <label className="flex items-start gap-3 rounded-2xl border border-border/60 bg-secondary/80 p-4 cursor-pointer select-none">
                 <Checkbox checked={consentAccepted} onCheckedChange={(v) => setConsentAccepted(v === true)} />
                 <span className="text-sm text-muted-foreground leading-snug">
                   I consent to my uploaded photo being processed by AI to generate enhanced images. I understand I can publish the final post to my LinkedIn account.
                 </span>
               </label>
 
-              <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4">
+              <div className="rounded-2xl border border-border/60 bg-secondary/70 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold">LinkedIn</p>
@@ -874,10 +891,8 @@ export function PostGeneratorWizard() {
               <div className="flex gap-3">
                 <Button
                   className={[
-                    'w-full h-11 !border !border-white/70 !text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-md disabled:opacity-100',
-                    canGoStep1
-                      ? '!bg-[#0672cb]/85 hover:!bg-[#00468b]/90'
-                      : '!bg-[#40576e]/75 disabled:!text-white/85',
+                    'w-full h-11 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.18)] backdrop-blur-md disabled:opacity-100',
+                    !canGoStep1 ? 'opacity-70' : '',
                   ].join(' ')}
                   variant="hero"
                   disabled={!canGoStep1}
@@ -944,7 +959,7 @@ export function PostGeneratorWizard() {
                     onClick={startSelfieCamera}
                     type="button"
                   >
-                    <Camera className="w-6 h-6 text-white mb-3" />
+                    <Camera className="w-6 h-6 text-foreground mb-3" />
                     <div className="text-sm font-semibold">Take photo</div>
                     <div className="text-xs text-muted-foreground mt-1">Mobile: camera · Laptop: webcam</div>
                   </button>
@@ -953,7 +968,7 @@ export function PostGeneratorWizard() {
                     onClick={() => fileInputRef.current?.click()}
                     type="button"
                   >
-                    <Upload className="w-6 h-6 text-white mb-3" />
+                    <Upload className="w-6 h-6 text-foreground mb-3" />
                     <div className="text-sm font-semibold">Upload</div>
                     <div className="text-xs text-muted-foreground mt-1">From gallery/files</div>
                   </button>
@@ -1027,10 +1042,16 @@ export function PostGeneratorWizard() {
                             key={n}
                             type="button"
                             onClick={() => setSurvey((prev) => ({ ...prev, [q.id]: n }))}
-                            className="p-1 rounded-md hover:bg-accent/10 transition-colors"
+                            className="p-1 rounded-md hover:bg-[#E2231A]/10 transition-colors"
                             aria-label={`${q.label}: ${n} star`}
                           >
-                            <Star className={filled ? 'w-6 h-6 text-accent fill-accent' : 'w-6 h-6 text-muted-foreground'} />
+                            <Star
+                              className={
+                                filled
+                                  ? 'w-6 h-6 text-[#E2231A] fill-[#E2231A]'
+                                  : 'w-6 h-6 text-[#E2231A]/30'
+                              }
+                            />
                           </button>
                         );
                       })}
