@@ -12,8 +12,9 @@ type ShareSession = {
   expiresAt: string;
 };
 
-export default function MobileSharePage({ params }: { params: { id: string } }) {
-  const id = params.id;
+/** Next.js 15: `params` is a Promise on the server; client pages receive the same type. */
+export default function MobileSharePage({ params }: { params: Promise<{ id: string }> }) {
+  const [id, setId] = useState<string | null>(null);
   const [session, setSession] = useState<ShareSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [linkedInConnected, setLinkedInConnected] = useState<boolean | null>(null);
@@ -27,6 +28,17 @@ export default function MobileSharePage({ params }: { params: { id: string } }) 
   }, [session]);
 
   useEffect(() => {
+    let cancelled = false;
+    void params.then((p) => {
+      if (!cancelled) setId(p.id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [params]);
+
+  useEffect(() => {
+    if (!id) return;
     let cancelled = false;
     (async () => {
       try {
@@ -61,6 +73,7 @@ export default function MobileSharePage({ params }: { params: { id: string } }) 
   }, []);
 
   const connectLinkedIn = () => {
+    if (!id) return;
     window.location.href = `/api/linkedin/auth?redirect=/m/share/${encodeURIComponent(id)}`;
   };
 
@@ -120,7 +133,7 @@ export default function MobileSharePage({ params }: { params: { id: string } }) 
           </p>
         </div>
 
-        {loading ? (
+        {!id || loading ? (
           <div className="rounded-2xl border border-border/60 bg-white p-4 text-sm">Loading…</div>
         ) : error ? (
           <div className="rounded-2xl border border-border/60 bg-white p-4 text-sm text-destructive">
