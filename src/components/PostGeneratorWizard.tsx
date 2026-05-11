@@ -1407,7 +1407,7 @@ export function PostGeneratorWizard() {
               <div>
                 <h2 className="text-2xl font-bold tracking-tight">Scan to post from mobile</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Open this link on your phone, connect LinkedIn, and post.
+                  Scan the QR code with your phone, connect LinkedIn, and post.
                 </p>
               </div>
 
@@ -1418,18 +1418,8 @@ export function PostGeneratorWizard() {
                     (typeof window !== 'undefined' ? window.location.origin : '');
                   const shareUrl = `${origin}/m/share/${shareSessionId}`;
                   return (
-                    <div className="space-y-4">
-                      <div className="mx-auto w-fit rounded-2xl border border-border/60 bg-white p-4">
-                        <QRCode value={shareUrl} size={220} />
-                      </div>
-                      <div className="text-xs text-muted-foreground break-all">{shareUrl}</div>
-                      <Button
-                        variant="hero"
-                        className="h-11 rounded-xl w-full"
-                        onClick={() => window.open(shareUrl, '_blank')}
-                      >
-                        Open link
-                      </Button>
+                    <div className="mx-auto w-fit rounded-2xl border border-border/60 bg-white p-4">
+                      <QRCode value={shareUrl} size={220} />
                     </div>
                   );
                 })()

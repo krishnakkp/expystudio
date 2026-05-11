@@ -200,27 +200,45 @@ export default function MobileSharePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {postUrl && (
-              <div className="rounded-2xl border border-border/60 bg-white p-4 text-sm">
-                Posted. Open it on LinkedIn:
-                <div className="mt-2">
-                  <a className="underline break-all" href={postUrl} target="_blank" rel="noreferrer">
-                    {postUrl}
-                  </a>
+              <div className="rounded-2xl border border-border/60 bg-white p-4 space-y-3">
+                <p className="text-sm font-medium text-center">Posted successfully</p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    type="button"
+                    variant="hero"
+                    className="h-11 rounded-xl flex-1"
+                    onClick={() => window.open(postUrl, '_blank', 'noopener,noreferrer')}
+                  >
+                    Open LinkedIn
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-xl flex-1 border-primary text-primary hover:bg-primary/10"
+                    onClick={() => {
+                      const share = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(postUrl)}`;
+                      window.open(share, '_blank', 'noopener,noreferrer');
+                    }}
+                  >
+                    Repost on LinkedIn
+                  </Button>
                 </div>
               </div>
             )}
 
-            <div className="flex gap-3">
-              {!linkedInConnected ? (
-                <Button className="w-full h-11 rounded-xl" onClick={connectLinkedIn} disabled={expired}>
-                  Connect LinkedIn
-                </Button>
-              ) : (
-                <Button className="w-full h-11 rounded-xl" onClick={postToLinkedIn} disabled={expired || posting}>
-                  {posting ? 'Posting…' : 'Post to LinkedIn'}
-                </Button>
-              )}
-            </div>
+            {!postUrl && (
+              <div className="flex gap-3">
+                {!linkedInConnected ? (
+                  <Button className="w-full h-11 rounded-xl" onClick={connectLinkedIn} disabled={expired}>
+                    Connect LinkedIn
+                  </Button>
+                ) : (
+                  <Button className="w-full h-11 rounded-xl" onClick={postToLinkedIn} disabled={expired || posting}>
+                    {posting ? 'Posting…' : 'Post to LinkedIn'}
+                  </Button>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
