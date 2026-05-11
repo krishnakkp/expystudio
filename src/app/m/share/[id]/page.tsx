@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { EXTRA_POST_IMAGE_CANDIDATES, EXTRA_POST_IMAGES } from '@/lib/extra-post-images';
 
 type ShareSession = {
   id: string;
@@ -83,8 +84,11 @@ export default function MobileSharePage({ params }: { params: Promise<{ id: stri
     setError(null);
     setPostUrl(null);
     try {
+      const assetUrns: string[] = [];
+
+      // 1) Featured image from share session (AI-selected)
       const urlResp = await fetch(session.selectedImageUrl, { cache: 'no-store' });
-      if (!urlResp.ok) throw new Error(`Image fetch failed (HTTP ${urlResp.status})`);
+      if (!urlResp.ok) throw new Error(`Featured image fetch failed (HTTP ${urlResp.status})`);
       const blob = await urlResp.blob();
 
       const form = new FormData();
@@ -96,15 +100,54 @@ export default function MobileSharePage({ params }: { params: Promise<{ id: stri
           setLinkedInConnected(false);
           throw new Error('LinkedIn session expired. Please reconnect.');
         }
-        throw new Error(err?.error || `Upload failed (HTTP ${uploadResp.status})`);
+        throw new Error(err?.error || `Featured upload failed (HTTP ${uploadResp.status})`);
       }
-      const { assetUrn } = await uploadResp.json();
+      const { assetUrn: featuredUrn } = await uploadResp.json();
+      if (featuredUrn) assetUrns.push(featuredUrn);
 
-      const postResp = await fetch('/api/linkedin/post', {
+      // 2) Same 3 generic images as desktop publish (server reads from /public)
+      for (let i = 0; i < EXTRA_POST_IMAGES.length; i++) {
+        let uploaded = false;
+        let lastError = 'HTTP 500';
+        const pathCandidates = EXTRA_POST_IMAGE_CANDIDATES[i] ?? [EXTRA_POST_IMAGES[i]];
+        for (const publicPath of pathCandidates) {
+          const upResp = await fetch('/api/linkedin/upload-public-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ publicPath }),
+          });
+          if (!upResp.ok) {
+            const err = await upResp.json().catch(() => ({ error: `HTTP ${upResp.status}` }));
+            if (err?.reconnectRequired) {
+              setLinkedInConnected(false);
+              throw new Error('LinkedIn session expired. Please reconnect.');
+            }
+            lastError = err?.error || `HTTP ${upResp.status}`;
+            continue;
+          }
+          const { assetUrn } = await upResp.json();
+          if (assetUrn) assetUrns.push(assetUrn);
+          uploaded = true;
+          break;
+        }
+        if (!uploaded) {
+          throw new Error(typeof lastError === 'string' ? lastError : 'Extra image upload failed');
+        }
+      }
+
+      let postResp = await fetch('/api/linkedin/post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caption: session.caption, assetUrns: assetUrn ? [assetUrn] : [] }),
+        body: JSON.stringify({ caption: session.caption, assetUrns }),
       });
+      if (!postResp.ok && postResp.status >= 500) {
+        await new Promise((r) => setTimeout(r, 1200));
+        postResp = await fetch('/api/linkedin/post', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ caption: session.caption, assetUrns }),
+        });
+      }
       if (!postResp.ok) {
         const err = await postResp.json().catch(() => ({ error: `HTTP ${postResp.status}` }));
         if (err?.reconnectRequired) {

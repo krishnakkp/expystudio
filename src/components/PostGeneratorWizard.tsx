@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { EXTRA_POST_IMAGE_CANDIDATES, EXTRA_POST_IMAGES } from '@/lib/extra-post-images';
 import {
   ArrowLeft,
   ArrowRight,
@@ -47,12 +48,6 @@ const CAPTION_OPTIONS: string[] = [
   `Insightful sessions at Dell Technologies Forum showcasing how organizations are leveraging emerging technologies for competitive advantage.\n\nA strong platform for collaboration, learning, and forward-looking ideas.\n\n#DellTechForum #DellTechnologies #DellTechWorld`,
 ];
 
-const EXTRA_POST_IMAGE_CANDIDATES = [
-  ['/dell/1.jpeg', '/dell/1.jpg', '/dell/1.JPG'],
-  ['/dell/2.jpeg', '/dell/2.jpg', '/dell/2.JPG'],
-  ['/dell/3.jpeg', '/dell/3.jpg', '/dell/3.JPG'],
-] as const;
-const EXTRA_POST_IMAGES = EXTRA_POST_IMAGE_CANDIDATES.map((paths) => paths[0]) as readonly string[];
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
 const SURVEY_CREATE_ENDPOINT =
   process.env.NEXT_PUBLIC_SURVEY_CREATE_URL?.trim() || 'https://expy.crafttechhub.com/survey/create';
