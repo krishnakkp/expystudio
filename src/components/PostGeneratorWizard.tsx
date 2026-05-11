@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -22,7 +23,7 @@ import {
   X,
 } from 'lucide-react';
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 type Rating = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -276,6 +277,9 @@ export function PostGeneratorWizard() {
   ]);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
+  const [shareSessionId, setShareSessionId] = useState<string | null>(null);
+  const [shareSessionError, setShareSessionError] = useState<string | null>(null);
+  const [shareSessionLoading, setShareSessionLoading] = useState(false);
 
   // Step 5
   const [selectedCaptionIndex, setSelectedCaptionIndex] = useState<number | null>(null);
@@ -373,6 +377,9 @@ export function PostGeneratorWizard() {
     setLinkedinProgress('');
     setLinkedinError(null);
     setLinkedinPostUrl(null);
+    setShareSessionId(null);
+    setShareSessionError(null);
+    setShareSessionLoading(false);
   }, []);
 
   useEffect(() => {
@@ -755,7 +762,7 @@ export function PostGeneratorWizard() {
       const postData = await postResp.json();
       if (postData?.postUrl) setLinkedinPostUrl(postData.postUrl);
 
-      setStep(7);
+      setStep(8);
     } catch (err) {
       setLinkedinError(getErrorMessage(err));
       toast({ title: 'LinkedIn publish failed', description: getErrorMessage(err), variant: 'destructive' });
@@ -769,11 +776,47 @@ export function PostGeneratorWizard() {
     canGoStep5,
     connectLinkedIn,
     getSelectedImageDataUrl,
+    linkedinPosting,
     linkedinConnected,
     selfieDataUrl,
     selectedCaption,
     toast,
   ]);
+
+  const createShareSession = useCallback(async () => {
+    const selected = getSelectedImageDataUrl();
+    if (!selected || !selectedCaption) {
+      setShareSessionError('Select an image and caption first.');
+      return;
+    }
+    setShareSessionLoading(true);
+    setShareSessionError(null);
+    setShareSessionId(null);
+    try {
+      const resp = await fetch('/api/share-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caption: selectedCaption,
+          imageDataUrl: selected,
+          expiresInMinutes: 15,
+        }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(txt || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      const id = data?.id as string | undefined;
+      if (!id) throw new Error('No session id returned');
+      setShareSessionId(id);
+      setStep(7);
+    } catch (err) {
+      setShareSessionError(getFriendlyGenerationError(getErrorMessage(err)));
+    } finally {
+      setShareSessionLoading(false);
+    }
+  }, [getSelectedImageDataUrl, selectedCaption]);
 
   const submitSurveyAndContinue = useCallback(async () => {
     if (!canGoStep3 || surveySubmitting) return;
@@ -849,7 +892,7 @@ export function PostGeneratorWizard() {
                   
                 </h1>
                 <p className="text-sm text-muted-foreground mt-3 text-center">
-                  Accept consent and connect your LinkedIn account.
+                  Accept consent to continue. You can connect LinkedIn when you post.
                 </p>
               </div>
 
@@ -860,34 +903,6 @@ export function PostGeneratorWizard() {
                 </span>
               </label>
 
-              <div className="rounded-2xl border border-border/60 bg-secondary/70 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">LinkedIn</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {linkedinConnected === null
-                        ? 'Checking…'
-                        : linkedinConnected
-                          ? `Connected${linkedinName ? ` as ${linkedinName}` : ''}`
-                          : 'Not connected'}
-                    </p>
-                  </div>
-                  {!linkedinConnected && linkedinConnected !== null && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() => {
-                        sessionStorage.setItem(WIZARD_STORAGE_KEY, '2');
-                        connectLinkedIn();
-                      }}
-                    >
-                      Connect
-                    </Button>
-                  )}
-                </div>
-              </div>
-
               <div className="flex gap-3">
                 <Button
                   className={[
@@ -896,14 +911,7 @@ export function PostGeneratorWizard() {
                   ].join(' ')}
                   variant="hero"
                   disabled={!canGoStep1}
-                  onClick={() => {
-                    if (!linkedinConnected) {
-                      sessionStorage.setItem(WIZARD_STORAGE_KEY, '2');
-                      connectLinkedIn();
-                      return;
-                    }
-                    setStep(2);
-                  }}
+                  onClick={() => setStep(2)}
                 >
                   Accept & Continue <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
@@ -1336,6 +1344,10 @@ export function PostGeneratorWizard() {
                 </p>
               )}
 
+              {shareSessionError && (
+                <p className="text-xs text-destructive">{shareSessionError}</p>
+              )}
+
               <div className="flex gap-3">
                 <Button variant="heroOutline" className="h-11 rounded-xl" onClick={() => setStep(5)} disabled={linkedinPosting}>
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back
@@ -1343,16 +1355,16 @@ export function PostGeneratorWizard() {
                 <Button
                   variant="hero"
                   className="flex-1 h-11 rounded-xl"
-                  disabled={!canGoStep4 || !canGoStep5 || linkedinPosting}
-                  onClick={publish}
+                  disabled={!canGoStep4 || !canGoStep5 || linkedinPosting || shareSessionLoading}
+                  onClick={createShareSession}
                 >
-                  {linkedinPosting ? (
+                  {shareSessionLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Posting
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating QR
                     </>
                   ) : (
                     <>
-                      Post <ArrowRight className="w-4 h-4 ml-2" />
+                      Confirm & Generate QR <ArrowRight className="w-4 h-4 ml-2" />
                     </>
                   )}
                 </Button>
@@ -1394,8 +1406,57 @@ export function PostGeneratorWizard() {
             </div>
           )}
 
-          {/* Step 7: Done */}
+          {/* Step 7: QR handoff */}
           {step === 7 && (
+            <div className="space-y-5 text-center">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">Scan to post from mobile</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Open this link on your phone, connect LinkedIn, and post.
+                </p>
+              </div>
+
+              {shareSessionId ? (
+                (() => {
+                  const origin =
+                    (process.env.NEXT_PUBLIC_APP_URL || '').trim() ||
+                    (typeof window !== 'undefined' ? window.location.origin : '');
+                  const shareUrl = `${origin}/m/share/${shareSessionId}`;
+                  return (
+                    <div className="space-y-4">
+                      <div className="mx-auto w-fit rounded-2xl border border-border/60 bg-white p-4">
+                        <QRCode value={shareUrl} size={220} />
+                      </div>
+                      <div className="text-xs text-muted-foreground break-all">{shareUrl}</div>
+                      <Button
+                        variant="hero"
+                        className="h-11 rounded-xl w-full"
+                        onClick={() => window.open(shareUrl, '_blank')}
+                      >
+                        Open link
+                      </Button>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="rounded-2xl border border-border/60 bg-white p-4 text-sm">
+                  No QR session found. Go back and generate again.
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3">
+                <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(6)}>
+                  Back to preview
+                </Button>
+                <Button variant="heroOutline" className="h-11 rounded-xl" onClick={startOver}>
+                  Start again
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 8: Done (desktop publish) */}
+          {step === 8 && (
             <div className="space-y-5 text-center">
               <div className="mx-auto w-16 h-16 rounded-full gradient-accent flex items-center justify-center text-white">
                 <Check className="w-7 h-7" />
