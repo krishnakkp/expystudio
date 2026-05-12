@@ -42,10 +42,10 @@ const SURVEY_QUESTIONS: { id: string; label: string }[] = [
 ];
 
 const CAPTION_OPTIONS: string[] = [
-  `Great insights and meaningful conversations at the Dell Technologies Forum, with a clear focus on innovation and business transformation.\n\nThe discussions highlighted how technology continues to shape enterprise resilience and growth.\n\n#DellTechnologiesForum #DellTechForum #DellTechWorld`,
-  `An engaging experience at Dell Technologies Forum, bringing together leaders to explore the future of digital transformation.\n\nStrong emphasis on practical solutions and scalable innovation across industries.\n\n#DellTechnologies #DellTechnologiesForum2026 #DellTechForum`,
-  `Dell Technologies Forum delivered valuable perspectives on navigating today's evolving tech landscape.\n\nThe sessions reinforced the importance of aligning technology with strategic business priorities.\n\n#DellTechWorld #DellTechnologiesForum #DellTechnologiesForum2026`,
-  `Insightful sessions at Dell Technologies Forum showcasing how organizations are leveraging emerging technologies for competitive advantage.\n\nA strong platform for collaboration, learning, and forward-looking ideas.\n\n#DellTechForum #DellTechnologies #DellTechWorld`,
+  `Great insights and meaningful conversations at Lenovo Tech World, with a strong focus on AI-driven innovation and enterprise transformation.\n\nThe discussions highlighted how technology continues to accelerate smarter business outcomes and operational agility.\n\n#LenovoTechWorld #Lenovo #Innovation`,
+  `An engaging experience at Lenovo Tech World, bringing together industry leaders to explore the future of intelligent technology and digital transformation.\n\nStrong emphasis on scalable solutions, collaboration, and real-world innovation across industries.\n\n#LenovoTechWorld #FutureOfWork #LenovoInnovation`,
+  `Lenovo Tech World delivered valuable perspectives on navigating today’s rapidly evolving technology landscape.\n\nThe sessions reinforced the importance of aligning AI, infrastructure, and business strategy for long-term growth.\n\n#Lenovo #LenovoTechWorld #DigitalTransformation`,
+  `Insightful sessions at Lenovo Tech World showcasing how organizations are leveraging emerging technologies to drive efficiency and competitive advantage.\n\nA strong platform for networking, learning, and forward-looking ideas.\n\n#LenovoTechWorld #AIInnovation #Lenovo`,
 ];
 
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
@@ -442,11 +442,37 @@ export function PostGeneratorWizard() {
   }, []);
 
   const promptVariants = useMemo(() => ([
-    'Create a professional LinkedIn-style photo at a tech conference keynote stage. Keep it photorealistic, phone-camera look, natural lighting.',
-    'Create a professional LinkedIn-style networking photo in a conference lobby. Photorealistic, candid, realistic lighting and perspective.',
-    'Create a professional LinkedIn-style expo-floor photo near booths and banners. Photorealistic, phone-camera look, realistic background.',
-    'Create a professional LinkedIn-style photo in front of an event backdrop (step-and-repeat). Photorealistic, crisp, realistic shadows.',
-
+    `Premium, slightly comical corporate poster at Lenovo Tech World Bangalore. Indian professional in sharp suit, confident corporate hero pose, wearing Lenovo event badge.
+  Modern innovation summit background, red-accent lighting, futuristic LED walls, blurred executive crowd. Subtle humor via visuals: floating AI icons, holographic laptops, rising analytics charts, dramatic spotlight, coffee cup, exaggerated networking in background.
+  Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+  Minimal text:
+  Headline: "Smarter. Faster. Bolder."
+  Footer: "Lenovo Tech World | Bangalore"
+  4K, LinkedIn-style, premium aesthetic.`,
+  
+    `Premium, slightly comical corporate poster at Lenovo Tech World Bangalore. Indian professional in sharp suit, confident leadership pose, wearing Lenovo event badge.
+  Modern enterprise conference background, sleek red-and-black tones, immersive LED screens, blurred tech audience. Subtle humor via visuals: floating cloud graphics, AI assistants on screens, dramatic keynote-style lighting, coffee cup, overenthusiastic handshakes in background.
+  Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+  Minimal text:
+  Headline: "Innovation, On Display"
+  Footer: "Lenovo Tech World | Bangalore"
+  4K, LinkedIn-style, premium aesthetic.`,
+  
+    `Premium, slightly comical corporate poster at Lenovo Tech World Bangalore. Indian professional in sharp suit, poised networking pose, wearing Lenovo event badge.
+  Futuristic tech expo background with Lenovo branding colors, glowing LED panels, blurred startup founders and executives. Subtle humor via visuals: floating productivity icons, oversized growth graphs, cinematic spotlight, coffee cup, exaggerated networking energy in background.
+  Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+  Minimal text:
+  Headline: "Where Vision Gets Built"
+  Footer: "Lenovo Tech World | Bangalore"
+  4K, LinkedIn-style, premium aesthetic.`,
+  
+    `Premium, slightly comical corporate poster at Lenovo Tech World Bangalore. Indian professional in sharp suit, composed premium portrait pose, wearing Lenovo event badge.
+  Modern AI-focused conference environment, red ambient lighting, futuristic presentation screens, blurred crowd. Subtle humor via visuals: floating innovation symbols, glowing devices, dramatic keynote atmosphere, coffee cup, exaggerated executive confidence in background.
+  Ultra-realistic, cinematic lighting, shallow depth, clean composition, not cluttered.
+  Minimal text:
+  Headline: "The Future Works Here"
+  Footer: "Lenovo Tech World | Bangalore"
+  4K, LinkedIn-style, premium aesthetic.`,
   ]), []);
 
   
@@ -873,7 +899,7 @@ export function PostGeneratorWizard() {
           <div className="flex items-center justify-center mb-4">
             <img
               src="/event/lenovo.png"
-              alt="Dell Technologies"
+              alt="Lenovo Tech World"
               className="h-8 w-auto drop-shadow"
             />
           </div>
