@@ -1,11 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -21,8 +20,9 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+import { EXTRA_POST_IMAGE_CANDIDATES, EXTRA_POST_IMAGES } from '@/lib/extra-post-images';
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 type Rating = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -46,16 +46,11 @@ const CAPTION_OPTIONS: string[] = [
   `Automation at scale. Simplicity in action.\n\nThat’s the core theme at Red Hat Ansible Automation 2026—and it’s powerful to see it come alive.\n\n#RedHat #RedHatAnsible #AnsibleAutomates #RedHatAnsible2026`,
 ];
 
-const EXTRA_POST_IMAGE_CANDIDATES = [
-  ['/red-hat/1.JPG', '/red-hat/1.jpg'],
-  ['/red-hat/2.JPG', '/red-hat/2.jpg'],
-  ['/red-hat/3.JPG', '/red-hat/3.jpg'],
-] as const;
-const EXTRA_POST_IMAGES = EXTRA_POST_IMAGE_CANDIDATES.map((paths) => paths[0]) as readonly string[];
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
 const SURVEY_CREATE_ENDPOINT =
   process.env.NEXT_PUBLIC_SURVEY_CREATE_URL?.trim() || 'https://expy.crafttechhub.com/survey/create';
 const SURVEY_EVENT_ID = process.env.NEXT_PUBLIC_SURVEY_EVENT_ID?.trim() || '';
+const EVENTS_ROW_UUID = process.env.NEXT_PUBLIC_EVENTS_UUID?.trim() || '';
 const AI_VARIANTS_TO_GENERATE = 4;
 
 function isValidEmail(value: string) {
@@ -220,30 +215,10 @@ async function normalizeForAiRequest(dataUrl: string): Promise<string> {
   return out;
 }
 
-async function copyToClipboard(text: string) {
-  // Clipboard API requires secure context on most mobile browsers.
-  if (navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  // Fallback: execCommand copy
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.setAttribute('readonly', 'true');
-  ta.style.position = 'fixed';
-  ta.style.top = '-9999px';
-  document.body.appendChild(ta);
-  ta.select();
-  const ok = document.execCommand('copy');
-  document.body.removeChild(ta);
-  if (!ok) throw new Error('Copy not permitted');
-}
-
 export function PostGeneratorWizard() {
   const { toast } = useToast();
 
   const [step, setStep] = useState<Step>(1);
-  const progressValue = useMemo(() => Math.round(((step - 1) / 6) * 100), [step]);
 
   // Step 1
   const [consentAccepted, setConsentAccepted] = useState(false);
@@ -292,7 +267,9 @@ export function PostGeneratorWizard() {
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
   const [linkedinPostUrl, setLinkedinPostUrl] = useState<string | null>(null);
 
-  // Resume after LinkedIn OAuth redirect
+  const [shareSessionId, setShareSessionId] = useState<string | null>(null);
+  const [shareSessionError, setShareSessionError] = useState<string | null>(null);
+  const [shareSessionLoading, setShareSessionLoading] = useState(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const linkedin = params.get('linkedin');
@@ -341,13 +318,16 @@ export function PostGeneratorWizard() {
   const canGoStep3 = surveyComplete && fullName.trim().length > 0 && companyName.trim().length > 0 && isValidEmail(email);
   const canGoStep4 = selectedImageIndices.length > 0 && Boolean(generatedImages[selectedImageIndices[0]]?.dataUrl);
   const canGoStep5 = selectedCaptionIndex !== null;
+  const canShowPreview = canGoStep4 && canGoStep5;
 
   const goNext = useCallback(() => {
-    setStep((s) => (s < 6 ? ((s + 1) as Step) : s));
+    setStep((s) => (s < 8 ? ((s + 1) as Step) : s));
   }, []);
   const goBack = useCallback(() => {
     setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
   }, []);
+
+  const generationStartedRef = useRef(false);
 
   const startOver = useCallback(() => {
     setStep(1);
@@ -374,6 +354,10 @@ export function PostGeneratorWizard() {
     setLinkedinProgress('');
     setLinkedinError(null);
     setLinkedinPostUrl(null);
+    setShareSessionId(null);
+    setShareSessionError(null);
+    setShareSessionLoading(false);
+    generationStartedRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -627,15 +611,6 @@ Footer: "Red Hat Ansible 2026 | Delhi"
     }
   }, [promptVariants, selfieDataUrl, toast]);
 
-  // auto-trigger generation once user reaches Step 4 (first time)
-  const step4AutoTriggeredRef = useRef(false);
-  useEffect(() => {
-    if (step !== 4) return;
-    if (step4AutoTriggeredRef.current) return;
-    step4AutoTriggeredRef.current = true;
-    generateFourImages();
-  }, [step, generateFourImages]);
-
   const checkLinkedIn = useCallback(async () => {
     try {
       const resp = await fetch('/api/linkedin/status', { cache: 'no-store' });
@@ -649,7 +624,7 @@ Footer: "Red Hat Ansible 2026 | Delhi"
   }, []);
 
   useEffect(() => {
-    if (step !== 1 && step !== 5 && step !== 6) return;
+    if (step !== 6) return;
     checkLinkedIn();
     const onFocus = () => checkLinkedIn();
     window.addEventListener('focus', onFocus);
@@ -699,17 +674,17 @@ Footer: "Red Hat Ansible 2026 | Delhi"
 
   const publish = useCallback(async () => {
     if (linkedinPosting || linkedinPublishLockRef.current) return;
+    if (!canShowPreview) return;
+
     linkedinPublishLockRef.current = true;
     setLinkedinError(null);
     setLinkedinPostUrl(null);
 
-    if (!canGoStep4 || !canGoStep5) return;
-
-    // If not connected, start OAuth.
     if (!linkedinConnected) {
       toast({ title: 'Connect LinkedIn', description: 'Please connect your LinkedIn account to publish.' });
       sessionStorage.setItem(WIZARD_STORAGE_KEY, '6');
       connectLinkedIn();
+      linkedinPublishLockRef.current = false;
       return;
     }
 
@@ -718,6 +693,7 @@ Footer: "Red Hat Ansible 2026 | Delhi"
     const imagesForPost = selectedUrls.length > 0 ? selectedUrls : selectedFallback;
     if (imagesForPost.length === 0) {
       toast({ title: 'Missing image', description: 'Please select an image first.', variant: 'destructive' });
+      linkedinPublishLockRef.current = false;
       return;
     }
 
@@ -729,9 +705,7 @@ Footer: "Red Hat Ansible 2026 | Delhi"
         filename: `selected-${i + 1}.jpg`,
       }));
 
-      // Upload each image to LinkedIn to get asset URNs.
       const assetUrns: string[] = [];
-      // 1) Upload selected image (small) via FormData
       for (let i = 0; i < imagesToUpload.length; i++) {
         setLinkedinProgress(`Uploading image ${i + 1} of ${imagesToUpload.length}…`);
         const form = new FormData();
@@ -751,7 +725,6 @@ Footer: "Red Hat Ansible 2026 | Delhi"
         assetUrns.push(assetUrn);
       }
 
-      // 2) Upload the 3 large public images server-side to avoid the 10MB request limit
       for (let i = 0; i < EXTRA_POST_IMAGES.length; i++) {
         setLinkedinProgress(`Uploading image ${imagesToUpload.length + i + 1} of ${imagesToUpload.length + EXTRA_POST_IMAGES.length}…`);
         let uploaded = false;
@@ -812,7 +785,11 @@ Footer: "Red Hat Ansible 2026 | Delhi"
       const postData = await postResp.json();
       if (postData?.postUrl) setLinkedinPostUrl(postData.postUrl);
 
-      setStep(7);
+      toast({
+        title: 'Posted to LinkedIn',
+        description: postData?.postUrl ? 'Open your post from the toast link if needed.' : 'Success.',
+      });
+      setStep(8);
     } catch (err) {
       setLinkedinError(getErrorMessage(err));
       toast({ title: 'LinkedIn publish failed', description: getErrorMessage(err), variant: 'destructive' });
@@ -822,15 +799,49 @@ Footer: "Red Hat Ansible 2026 | Delhi"
       linkedinPublishLockRef.current = false;
     }
   }, [
-    canGoStep4,
-    canGoStep5,
+    canShowPreview,
     connectLinkedIn,
     getSelectedImageDataUrls,
     linkedinConnected,
+    linkedinPosting,
     selfieDataUrl,
     selectedCaption,
     toast,
   ]);
+
+  const createShareSession = useCallback(async () => {
+    const selected = getSelectedImageDataUrls()[0] ?? null;
+    if (!selected || !selectedCaption) {
+      setShareSessionError('Select an image and caption first.');
+      return;
+    }
+    setShareSessionLoading(true);
+    setShareSessionError(null);
+    setShareSessionId(null);
+    try {
+      const resp = await fetch('/api/share-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caption: selectedCaption,
+          imageDataUrl: selected,
+          expiresInMinutes: 15,
+        }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(txt || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      if (!data?.id) throw new Error('No session id returned');
+      setShareSessionId(data.id);
+      setStep(7);
+    } catch (e) {
+      setShareSessionError(getFriendlyGenerationError(getErrorMessage(e)));
+    } finally {
+      setShareSessionLoading(false);
+    }
+  }, [getSelectedImageDataUrls, selectedCaption]);
 
   const submitSurveyAndContinue = useCallback(async () => {
     if (!canGoStep3 || surveySubmitting) return;
@@ -841,6 +852,26 @@ Footer: "Red Hat Ansible 2026 | Delhi"
 
     setSurveySubmitting(true);
     try {
+      const supaResp = await fetch('/api/survey-responses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: fullName.trim(),
+          email: email.trim(),
+          company_name: companyName.trim(),
+          q1_overall_satisfaction: survey.q1,
+          q2_content_quality: survey.q2,
+          q3_event_experience: survey.q3,
+          q4_recommend_likelihood: survey.q4,
+          q5_expectations_met: survey.q5,
+          events_id: EVENTS_ROW_UUID || null,
+        }),
+      });
+      if (!supaResp.ok) {
+        const t = await supaResp.text().catch(() => '');
+        throw new Error(t || `Survey save failed (${supaResp.status})`);
+      }
+
       const body = new URLSearchParams();
       body.set('full_name', fullName.trim());
       body.set('email', email.trim());
@@ -907,7 +938,7 @@ Footer: "Red Hat Ansible 2026 | Delhi"
                   2026
                 </h1>
                 <p className="text-sm text-muted-foreground mt-3 text-center">
-                  Accept consent and connect your LinkedIn account (required to publish).
+                  Accept consent to continue. You can connect LinkedIn when you post from your phone or this browser.
                 </p>
               </div>
 
@@ -918,53 +949,22 @@ Footer: "Red Hat Ansible 2026 | Delhi"
                 </span>
               </label>
 
-              <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">LinkedIn</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {linkedinConnected === null
-                        ? 'Checking…'
-                        : linkedinConnected
-                          ? `Connected${linkedinName ? ` as ${linkedinName}` : ''}`
-                          : 'Not connected'}
-                    </p>
-                  </div>
-                  {!linkedinConnected && linkedinConnected !== null && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() => {
-                        sessionStorage.setItem(WIZARD_STORAGE_KEY, '2');
-                        connectLinkedIn();
-                      }}
-                    >
-                      Connect
-                    </Button>
-                  )}
-                </div>
-              </div>
-
               <div className="flex gap-3">
                 <Button
                   className="w-full h-11"
                   variant="hero"
                   disabled={!canGoStep1}
-                  onClick={() => {
-                    if (!linkedinConnected) {
-                      sessionStorage.setItem(WIZARD_STORAGE_KEY, '2');
-                      connectLinkedIn();
-                      return;
-                    }
-                    setStep(2);
-                  }}
+                  onClick={() => setStep(2)}
                 >
                   Accept & Continue <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                You can review terms any time at <a className="underline" href="https://visuallystudios.com/privacy-policy/" target="_blank" rel="noreferrer">Terms</a>.
+              <p className="text-[11px] text-muted-foreground text-center">
+                You can review terms any time at{' '}
+                <a className="underline" href="https://visuallystudios.com/privacy-policy/" target="_blank" rel="noreferrer">
+                  Terms
+                </a>
+                .
               </p>
             </div>
           )}
@@ -975,7 +975,7 @@ Footer: "Red Hat Ansible 2026 | Delhi"
               <div>
                 <h2 className="text-2xl font-bold tracking-tight">Take or upload a photo</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Use the front camera or upload a selfie. You can retake anytime.
+                  Use the front camera or upload a selfie. AI images start when you continue—you will pick one after a quick survey.
                 </p>
               </div>
 
@@ -1060,8 +1060,8 @@ Footer: "Red Hat Ansible 2026 | Delhi"
                   className="flex-1 h-11 rounded-xl"
                   disabled={!canGoStep2}
                   onClick={() => {
-                    if (!step4AutoTriggeredRef.current) {
-                      step4AutoTriggeredRef.current = true;
+                    if (!generationStartedRef.current) {
+                      generationStartedRef.current = true;
                       void generateFourImages();
                     }
                     setStep(3);
@@ -1297,7 +1297,7 @@ Footer: "Red Hat Ansible 2026 | Delhi"
                 <Button
                   variant="hero"
                   className="flex-1 h-11 rounded-xl"
-                  disabled={!canGoStep4 || !canGoStep5}
+                  disabled={!canShowPreview}
                   onClick={() => setStep(6)}
                 >
                   Preview post <ArrowRight className="w-4 h-4 ml-2" />
@@ -1327,7 +1327,7 @@ Footer: "Red Hat Ansible 2026 | Delhi"
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold truncate">{linkedinName || fullName || 'Your Name'}</p>
-                    <p className="text-xs text-neutral-500">Posting to LinkedIn</p>
+                    <p className="text-xs text-neutral-500">Confirm, then scan the QR code on your phone to post.</p>
                   </div>
                 </div>
 
@@ -1449,6 +1449,10 @@ Footer: "Red Hat Ansible 2026 | Delhi"
                 <p className="text-xs text-destructive">{linkedinError}</p>
               )}
 
+              {shareSessionError && (
+                <p className="text-xs text-destructive">{shareSessionError}</p>
+              )}
+
               {linkedinPosting && (
                 <p className="text-xs text-muted-foreground flex items-center gap-2">
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -1457,26 +1461,41 @@ Footer: "Red Hat Ansible 2026 | Delhi"
               )}
 
               <div className="flex gap-3">
-                <Button variant="heroOutline" className="h-11 rounded-xl" onClick={() => setStep(5)} disabled={linkedinPosting}>
+                <Button variant="heroOutline" className="h-11 rounded-xl" onClick={() => setStep(5)} disabled={linkedinPosting || shareSessionLoading}>
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
                 <Button
                   variant="hero"
                   className="flex-1 h-11 rounded-xl"
-                  disabled={!canGoStep4 || !canGoStep5 || linkedinPosting}
-                  onClick={publish}
+                  disabled={!canShowPreview || linkedinPosting || shareSessionLoading}
+                  onClick={createShareSession}
                 >
-                  {linkedinPosting ? (
+                  {shareSessionLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Posting
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating QR
                     </>
                   ) : (
                     <>
-                      Post <ArrowRight className="w-4 h-4 ml-2" />
+                      Confirm & generate QR <ArrowRight className="w-4 h-4 ml-2" />
                     </>
                   )}
                 </Button>
               </div>
+
+              <Button
+                variant="outline"
+                className="h-11 rounded-xl w-full"
+                onClick={publish}
+                disabled={!canShowPreview || linkedinPosting || shareSessionLoading}
+              >
+                {linkedinPosting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Posting from this browser
+                  </>
+                ) : (
+                  'Post from this browser (optional)'
+                )}
+              </Button>
 
               <div className="rounded-2xl border border-border/60 overflow-hidden bg-card">
                 <div className="p-4 border-b border-border/60">
