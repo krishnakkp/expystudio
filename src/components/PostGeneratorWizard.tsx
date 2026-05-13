@@ -1533,21 +1533,67 @@ Footer: "Red Hat Ansible 2026 | Delhi"
             </div>
           )}
 
-          {/* Step 7: Done */}
-          {step === 7 && (
+          {/* Step 7: QR for mobile posting */}
+          {step === 7 && shareSessionId && (
+            <div className="space-y-5 text-center">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-white">Scan to post from mobile</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Scan the QR code with your phone, connect LinkedIn, and publish to your account.
+                </p>
+              </div>
+              <div className="mx-auto w-fit rounded-2xl border border-border/60 bg-white p-4">
+                <QRCode
+                  value={`${(process.env.NEXT_PUBLIC_APP_URL || '').trim() || (typeof window !== 'undefined' ? window.location.origin : '')}/m/share/${shareSessionId}`}
+                  size={220}
+                />
+              </div>
+              <div className="flex flex-col gap-3">
+                <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(6)}>
+                  Back to preview
+                </Button>
+                <Button variant="heroOutline" className="h-11 rounded-xl" onClick={startOver}>
+                  Start again
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === 7 && !shareSessionId && (
+            <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4 text-sm text-center text-white">
+              No share session. Go back to preview and generate a QR code.
+              <div className="mt-3">
+                <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(6)}>
+                  Back to preview
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 8: Posted from this browser */}
+          {step === 8 && (
             <div className="space-y-5 text-center">
               <div className="mx-auto w-16 h-16 rounded-full gradient-accent flex items-center justify-center text-white">
                 <Check className="w-7 h-7" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold tracking-tight">Thanks{fullName ? `, ${fullName}` : ''}!</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Your LinkedIn post has been published.
-                </p>
+                <h2 className="text-2xl font-bold tracking-tight text-white">
+                  Thanks{fullName ? `, ${fullName}` : ''}!
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">Your LinkedIn post has been published.</p>
               </div>
+              {linkedinPostUrl && (
+                <Button
+                  variant="outline"
+                  className="h-11 rounded-xl w-full"
+                  onClick={() => window.open(linkedinPostUrl, '_blank', 'noopener,noreferrer')}
+                >
+                  Open post
+                </Button>
+              )}
               <Button
                 variant="outline"
-                className="h-11 rounded-xl"
+                className="h-11 rounded-xl w-full"
                 onClick={() => {
                   window.location.assign('https://www.linkedin.com/feed/');
                 }}
@@ -1555,7 +1601,7 @@ Footer: "Red Hat Ansible 2026 | Delhi"
                 Go to LinkedIn
               </Button>
               <div className="flex flex-col gap-3">
-                <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(5)}>
+                <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(6)}>
                   Back to preview
                 </Button>
                 <Button variant="heroOutline" className="h-11 rounded-xl" onClick={startOver}>
