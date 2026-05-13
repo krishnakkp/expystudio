@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -21,8 +22,9 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+import { EXTRA_POST_IMAGE_CANDIDATES, EXTRA_POST_IMAGES } from '@/lib/extra-post-images';
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 type Rating = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -46,16 +48,12 @@ const CAPTION_OPTIONS: string[] = [
   `Insightful sessions at Dell Technologies Forum showcasing how organizations are leveraging emerging technologies for competitive advantage.\n\nA strong platform for collaboration, learning, and forward-looking ideas.\n\n#DellTechForum #DellTechnologies #DellTechWorld`,
 ];
 
-const EXTRA_POST_IMAGE_CANDIDATES = [
-  ['/dell/1.jpeg', '/dell/1.jpg', '/dell/1.JPG'],
-  ['/dell/2.jpeg', '/dell/2.jpg', '/dell/2.JPG'],
-  ['/dell/3.jpeg', '/dell/3.jpg', '/dell/3.JPG'],
-] as const;
-const EXTRA_POST_IMAGES = EXTRA_POST_IMAGE_CANDIDATES.map((paths) => paths[0]) as readonly string[];
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
 const SURVEY_CREATE_ENDPOINT =
   process.env.NEXT_PUBLIC_SURVEY_CREATE_URL?.trim() || 'https://expy.crafttechhub.com/survey/create';
 const SURVEY_EVENT_ID = process.env.NEXT_PUBLIC_SURVEY_EVENT_ID?.trim() || '';
+/** UUID of `public.events.id` for `survey_responses.events_id` (optional). */
+const EVENTS_ROW_UUID = process.env.NEXT_PUBLIC_EVENTS_UUID?.trim() || '';
 const AI_VARIANTS_TO_GENERATE = 4;
 
 function isValidEmail(value: string) {
@@ -243,7 +241,10 @@ export function PostGeneratorWizard() {
   const { toast } = useToast();
 
   const [step, setStep] = useState<Step>(1);
-  const progressValue = useMemo(() => Math.round(((step - 1) / 6) * 100), [step]);
+  const progressValue = useMemo(
+    () => (step >= 8 ? 100 : Math.round(((step - 1) / 7) * 100)),
+    [step]
+  );
 
   // Step 1
   const [consentAccepted, setConsentAccepted] = useState(false);
@@ -291,7 +292,9 @@ export function PostGeneratorWizard() {
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
   const [linkedinPostUrl, setLinkedinPostUrl] = useState<string | null>(null);
 
-  // Resume after LinkedIn OAuth redirect
+  const [shareSessionId, setShareSessionId] = useState<string | null>(null);
+  const [shareSessionError, setShareSessionError] = useState<string | null>(null);
+  const [shareSessionLoading, setShareSessionLoading] = useState(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const linkedin = params.get('linkedin');
@@ -334,19 +337,23 @@ export function PostGeneratorWizard() {
     }
   }, [toast]);
 
-  const canGoStep1 = consentAccepted;
-  const canGoStep2 = Boolean(selfieDataUrl);
+  const canContinueConsent = consentAccepted;
+  const canContinuePhoto = Boolean(selfieDataUrl);
   const surveyComplete = SURVEY_QUESTIONS.every((q) => (survey[q.id] ?? 0) > 0);
-  const canGoStep3 = surveyComplete && fullName.trim().length > 0 && companyName.trim().length > 0 && isValidEmail(email);
-  const canGoStep4 = selectedImageIndex !== null && generatedImages[selectedImageIndex]?.dataUrl;
-  const canGoStep5 = selectedCaptionIndex !== null;
+  const canSubmitSurvey =
+    surveyComplete && fullName.trim().length > 0 && companyName.trim().length > 0 && isValidEmail(email);
+  const canContinueSelect = selectedImageIndex !== null && Boolean(generatedImages[selectedImageIndex ?? 0]?.dataUrl);
+  const canContinueCaption = selectedCaptionIndex !== null;
+  const canShowPreview = canContinueSelect && canContinueCaption;
 
   const goNext = useCallback(() => {
-    setStep((s) => (s < 6 ? ((s + 1) as Step) : s));
+    setStep((s) => (s < 8 ? ((s + 1) as Step) : s));
   }, []);
   const goBack = useCallback(() => {
     setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
   }, []);
+
+  const generationStartedRef = useRef(false);
 
   const startOver = useCallback(() => {
     setStep(1);
@@ -373,6 +380,10 @@ export function PostGeneratorWizard() {
     setLinkedinProgress('');
     setLinkedinError(null);
     setLinkedinPostUrl(null);
+    setShareSessionId(null);
+    setShareSessionError(null);
+    setShareSessionLoading(false);
+    generationStartedRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -475,22 +486,26 @@ export function PostGeneratorWizard() {
       // }
 
       const aiPrompts = promptVariants.slice(0, AI_VARIANTS_TO_GENERATE);
-      const aiResults: GeneratedImage[] = [];
 
-      // Run sequentially for better reliability on mobile networks/devices.
-      for (let promptIndex = 0; promptIndex < aiPrompts.length; promptIndex++) {
-        const prompt = aiPrompts[promptIndex];
+      const runOne = async (prompt: string, promptIndex: number) => {
         const fullPrompt = `${prompt}\n\nUse the person from selfie.jpg as the subject. Keep identity, face, hair, and body proportions consistent. Do not create cartoon/art styles.`;
 
         let finalError = 'Generation failed';
         let generatedForPrompt: string | null = null;
+
         for (let attempt = 0; attempt < 2 && !generatedForPrompt; attempt++) {
           try {
-            // Try Gemini first
+            // Try Gemini first (spread load across 4 keys)
             const form = new FormData();
             form.append('prompt', fullPrompt);
+            form.append('keyIndex', String(promptIndex % 4));
             form.append('image[]', selfieBlob, 'selfie.jpg');
-            const geminiResp = await fetchWithTimeout('/api/generate-image-gemini', { method: 'POST', body: form }, 45000);
+
+            const geminiResp = await fetchWithTimeout(
+              '/api/generate-image-gemini',
+              { method: 'POST', body: form },
+              45000
+            );
             if (geminiResp.ok) {
               const data = await geminiResp.json();
               const b64 = data?.data?.[0]?.b64_json as string | undefined;
@@ -535,22 +550,29 @@ export function PostGeneratorWizard() {
         }
 
         if (generatedForPrompt) {
-          aiResults.push({ dataUrl: generatedForPrompt });
           setGeneratedImages((prev) => {
             const next = [...prev];
             next[promptIndex] = { dataUrl: generatedForPrompt };
             return next;
           });
-        } else {
-          const failed = { dataUrl: null, error: finalError };
-          aiResults.push(failed);
-          setGeneratedImages((prev) => {
-            const next = [...prev];
-            next[promptIndex] = failed;
-            return next;
-          });
+          return { dataUrl: generatedForPrompt } as GeneratedImage;
         }
-      }
+
+        const failed = { dataUrl: null, error: finalError } as GeneratedImage;
+        setGeneratedImages((prev) => {
+          const next = [...prev];
+          next[promptIndex] = failed;
+          return next;
+        });
+        return failed;
+      };
+
+      const settled = await Promise.allSettled(aiPrompts.map((p, i) => runOne(p, i)));
+      const aiResults: GeneratedImage[] = settled.map((r) =>
+        r.status === 'fulfilled'
+          ? r.value
+          : { dataUrl: null, error: getFriendlyGenerationError(getErrorMessage(r.reason)) }
+      );
 
       const next: GeneratedImage[] = Array.from({ length: 4 }).map((_, i) => {
         const aiResult = aiResults[i] ?? null;
@@ -588,15 +610,6 @@ export function PostGeneratorWizard() {
     }
   }, [promptVariants, selfieDataUrl, toast]);
 
-  // auto-trigger generation once user reaches Step 4 (first time)
-  const step4AutoTriggeredRef = useRef(false);
-  useEffect(() => {
-    if (step !== 4) return;
-    if (step4AutoTriggeredRef.current) return;
-    step4AutoTriggeredRef.current = true;
-    generateFourImages();
-  }, [step, generateFourImages]);
-
   const checkLinkedIn = useCallback(async () => {
     try {
       const resp = await fetch('/api/linkedin/status', { cache: 'no-store' });
@@ -610,7 +623,7 @@ export function PostGeneratorWizard() {
   }, []);
 
   useEffect(() => {
-    if (step !== 1 && step !== 5 && step !== 6) return;
+    if (step !== 6) return;
     checkLinkedIn();
     const onFocus = () => checkLinkedIn();
     window.addEventListener('focus', onFocus);
@@ -629,23 +642,25 @@ export function PostGeneratorWizard() {
 
   const publish = useCallback(async () => {
     if (linkedinPosting || linkedinPublishLockRef.current) return;
+    if (!canShowPreview) return;
+
     linkedinPublishLockRef.current = true;
     setLinkedinError(null);
     setLinkedinPostUrl(null);
-
-    if (!canGoStep4 || !canGoStep5) return;
 
     // If not connected, start OAuth.
     if (!linkedinConnected) {
       toast({ title: 'Connect LinkedIn', description: 'Please connect your LinkedIn account to publish.' });
       sessionStorage.setItem(WIZARD_STORAGE_KEY, '6');
       connectLinkedIn();
+      linkedinPublishLockRef.current = false;
       return;
     }
 
     const selected = getSelectedImageDataUrl() || selfieDataUrl;
     if (!selected) {
       toast({ title: 'Missing image', description: 'Please select an image first.', variant: 'destructive' });
+      linkedinPublishLockRef.current = false;
       return;
     }
 
@@ -738,7 +753,11 @@ export function PostGeneratorWizard() {
       const postData = await postResp.json();
       if (postData?.postUrl) setLinkedinPostUrl(postData.postUrl);
 
-      setStep(7);
+      toast({
+        title: 'Posted to LinkedIn',
+        description: postData?.postUrl ? 'Open your post from the toast link if needed.' : 'Success.',
+      });
+      setStep(8);
     } catch (err) {
       setLinkedinError(getErrorMessage(err));
       toast({ title: 'LinkedIn publish failed', description: getErrorMessage(err), variant: 'destructive' });
@@ -748,18 +767,52 @@ export function PostGeneratorWizard() {
       linkedinPublishLockRef.current = false;
     }
   }, [
-    canGoStep4,
-    canGoStep5,
+    canShowPreview,
     connectLinkedIn,
     getSelectedImageDataUrl,
     linkedinConnected,
+    linkedinPosting,
     selfieDataUrl,
     selectedCaption,
     toast,
   ]);
 
+  const createShareSession = useCallback(async () => {
+    const selected = getSelectedImageDataUrl();
+    if (!selected || !selectedCaption) {
+      setShareSessionError('Select an image and caption first.');
+      return;
+    }
+    setShareSessionLoading(true);
+    setShareSessionError(null);
+    setShareSessionId(null);
+    try {
+      const resp = await fetch('/api/share-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caption: selectedCaption,
+          imageDataUrl: selected,
+          expiresInMinutes: 15,
+        }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(txt || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      if (!data?.id) throw new Error('No session id returned');
+      setShareSessionId(data.id);
+      setStep(7);
+    } catch (e) {
+      setShareSessionError(getFriendlyGenerationError(getErrorMessage(e)));
+    } finally {
+      setShareSessionLoading(false);
+    }
+  }, [getSelectedImageDataUrl, selectedCaption]);
+
   const submitSurveyAndContinue = useCallback(async () => {
-    if (!canGoStep3 || surveySubmitting) return;
+    if (!canSubmitSurvey || surveySubmitting) return;
     if (surveySaved) {
       setStep(4);
       return;
@@ -767,6 +820,26 @@ export function PostGeneratorWizard() {
 
     setSurveySubmitting(true);
     try {
+      const supaResp = await fetch('/api/survey-responses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: fullName.trim(),
+          email: email.trim(),
+          company_name: companyName.trim(),
+          q1_overall_satisfaction: survey.q1,
+          q2_content_quality: survey.q2,
+          q3_event_experience: survey.q3,
+          q4_recommend_likelihood: survey.q4,
+          q5_expectations_met: survey.q5,
+          events_id: EVENTS_ROW_UUID || null,
+        }),
+      });
+      if (!supaResp.ok) {
+        const t = await supaResp.text().catch(() => '');
+        throw new Error(t || `Survey save failed (${supaResp.status})`);
+      }
+
       const body = new URLSearchParams();
       body.set('full_name', fullName.trim());
       body.set('email', email.trim());
@@ -807,10 +880,10 @@ export function PostGeneratorWizard() {
     } finally {
       setSurveySubmitting(false);
     }
-  }, [canGoStep3, surveySubmitting, surveySaved, fullName, email, companyName, survey, toast]);
+  }, [canSubmitSurvey, surveySubmitting, surveySaved, fullName, email, companyName, survey, toast]);
 
   return (
-    <div className="min-h-[100svh] w-full bg-[url('/event/bg-dark.png')] bg-cover bg-center bg-fixed flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
+    <div className="min-h-[100svh] w-full bg-[#0076CE] flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
       <div className="w-full max-w-md">
         <Card className="relative overflow-hidden border text-white [&_.text-muted-foreground]:text-white/85 shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] p-6 bg-[#0076CE] flex flex-col justify-center [&_button[class*='inline-flex']]:[background-image:none] [&_button[class*='inline-flex']]:border [&_button[class*='inline-flex']]:bg-[#0672cb] [&_button[class*='inline-flex']]:border-white/70 [&_button[class*='inline-flex']]:text-white [&_button[class*='inline-flex']:hover]:bg-[#00468b] [&_button[class*='inline-flex']:hover]:border-white/85 [&_button[class*='inline-flex']:disabled]:!bg-[#40576e] [&_button[class*='inline-flex']:disabled]:!border-white/70 [&_button[class*='inline-flex']:disabled]:!text-white/85">
           <div className="relative z-10 w-full">
@@ -829,10 +902,9 @@ export function PostGeneratorWizard() {
               <div>
                 <h1 className="text-3xl font-bold tracking-tight text-center text-white">
                   Forum 2026
-                  
                 </h1>
                 <p className="text-sm text-muted-foreground mt-3 text-center">
-                  Accept consent and connect your LinkedIn account.
+                  Accept consent to continue. You can connect LinkedIn when you post from your phone or this browser.
                 </p>
               </div>
 
@@ -843,58 +915,27 @@ export function PostGeneratorWizard() {
                 </span>
               </label>
 
-              <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">LinkedIn</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {linkedinConnected === null
-                        ? 'Checking…'
-                        : linkedinConnected
-                          ? `Connected${linkedinName ? ` as ${linkedinName}` : ''}`
-                          : 'Not connected'}
-                    </p>
-                  </div>
-                  {!linkedinConnected && linkedinConnected !== null && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() => {
-                        sessionStorage.setItem(WIZARD_STORAGE_KEY, '2');
-                        connectLinkedIn();
-                      }}
-                    >
-                      Connect
-                    </Button>
-                  )}
-                </div>
-              </div>
-
               <div className="flex gap-3">
                 <Button
                   className={[
                     'w-full h-11 !border !border-white/70 !text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-md disabled:opacity-100',
-                    canGoStep1
+                    canContinueConsent
                       ? '!bg-[#0672cb]/85 hover:!bg-[#00468b]/90'
                       : '!bg-[#40576e]/75 disabled:!text-white/85',
                   ].join(' ')}
                   variant="hero"
-                  disabled={!canGoStep1}
-                  onClick={() => {
-                    if (!linkedinConnected) {
-                      sessionStorage.setItem(WIZARD_STORAGE_KEY, '2');
-                      connectLinkedIn();
-                      return;
-                    }
-                    setStep(2);
-                  }}
+                  disabled={!canContinueConsent}
+                  onClick={() => setStep(2)}
                 >
                   Accept & Continue <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
-              <p className="text-[12px] text-muted-foreground">
-                You can review terms any time at <a className="underline" href="https://visuallystudios.com/privacy-policy/" target="_blank" rel="noreferrer">Terms</a>.
+              <p className="text-[12px] text-muted-foreground text-center">
+                You can review terms any time at{' '}
+                <a className="underline" href="https://visuallystudios.com/privacy-policy/" target="_blank" rel="noreferrer">
+                  Terms
+                </a>
+                .
               </p>
             </div>
           )}
@@ -905,7 +946,7 @@ export function PostGeneratorWizard() {
               <div>
                 <h2 className="text-2xl font-bold tracking-tight">Take or upload a photo</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Use the front camera or upload a selfie. You can retake anytime.
+                  Use the front camera or upload a selfie. AI images start generating when you continue—you will pick one after a quick survey.
                 </p>
               </div>
 
@@ -966,7 +1007,10 @@ export function PostGeneratorWizard() {
                     type="button"
                     variant="outline"
                     className="flex-1 h-11 rounded-xl"
-                    onClick={() => { stopSelfieCamera(); setSelfieDataUrl(null); }}
+                    onClick={() => {
+                      stopSelfieCamera();
+                      setSelfieDataUrl(null);
+                    }}
                   >
                     Retake
                   </Button>
@@ -986,13 +1030,17 @@ export function PostGeneratorWizard() {
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
                 <Button
+                  className={[
+                    'flex-1 h-11 !border !border-white/70 !text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-md disabled:opacity-100',
+                    canContinuePhoto
+                      ? '!bg-[#0672cb]/85 hover:!bg-[#00468b]/90'
+                      : '!bg-[#40576e]/75 disabled:!text-white/85',
+                  ].join(' ')}
                   variant="hero"
-                  className="flex-1 h-11 rounded-xl"
-                  disabled={!canGoStep2}
+                  disabled={!canContinuePhoto}
                   onClick={() => {
-                    // Start generation earlier so Step 4 is faster.
-                    if (!step4AutoTriggeredRef.current) {
-                      step4AutoTriggeredRef.current = true;
+                    if (!generationStartedRef.current) {
+                      generationStartedRef.current = true;
                       void generateFourImages();
                     }
                     setStep(3);
@@ -1067,7 +1115,7 @@ export function PostGeneratorWizard() {
                 <Button
                   variant="hero"
                   className="flex-1 h-11 rounded-xl"
-                  disabled={!canGoStep3 || surveySubmitting}
+                  disabled={!canSubmitSurvey || surveySubmitting}
                   onClick={submitSurveyAndContinue}
                 >
                   {surveySubmitting ? (
@@ -1169,7 +1217,7 @@ export function PostGeneratorWizard() {
                   type="button"
                   variant="hero"
                   className="flex-1 h-11 rounded-xl"
-                  disabled={!canGoStep4}
+                  disabled={!canContinueSelect}
                   onClick={() => setStep(5)}
                 >
                   Continue <ArrowRight className="w-4 h-4 ml-2" />
@@ -1225,7 +1273,7 @@ export function PostGeneratorWizard() {
                 <Button
                   variant="hero"
                   className="flex-1 h-11 rounded-xl"
-                  disabled={!canGoStep4 || !canGoStep5}
+                  disabled={!canShowPreview}
                   onClick={() => setStep(6)}
                 >
                   Preview post <ArrowRight className="w-4 h-4 ml-2" />
@@ -1234,7 +1282,7 @@ export function PostGeneratorWizard() {
             </div>
           )}
 
-          {/* Step 6: Full LinkedIn preview + post */}
+          {/* Step 6: Preview */}
           {step === 6 && (
             <div className="space-y-5">
               <div className="text-center">
@@ -1255,7 +1303,7 @@ export function PostGeneratorWizard() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold truncate">{linkedinName || fullName || 'Your Name'}</p>
-                    <p className="text-xs text-neutral-500">Posting to LinkedIn</p>
+                    <p className="text-xs text-neutral-500">Confirm, then scan the QR code on your phone to post.</p>
                   </div>
                 </div>
 
@@ -1315,27 +1363,46 @@ export function PostGeneratorWizard() {
                 </p>
               )}
 
+              {shareSessionError && (
+                <p className="text-xs text-destructive">{shareSessionError}</p>
+              )}
+
               <div className="flex gap-3">
-                <Button variant="heroOutline" className="h-11 rounded-xl" onClick={() => setStep(5)} disabled={linkedinPosting}>
+                <Button variant="heroOutline" className="h-11 rounded-xl" onClick={() => setStep(5)} disabled={linkedinPosting || shareSessionLoading}>
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
                 <Button
                   variant="hero"
                   className="flex-1 h-11 rounded-xl"
-                  disabled={!canGoStep4 || !canGoStep5 || linkedinPosting}
-                  onClick={publish}
+                  disabled={!canShowPreview || linkedinPosting || shareSessionLoading}
+                  onClick={createShareSession}
                 >
-                  {linkedinPosting ? (
+                  {shareSessionLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Posting
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating QR
                     </>
                   ) : (
                     <>
-                      Post <ArrowRight className="w-4 h-4 ml-2" />
+                      Confirm & generate QR <ArrowRight className="w-4 h-4 ml-2" />
                     </>
                   )}
                 </Button>
               </div>
+
+              <Button
+                variant="outline"
+                className="h-11 rounded-xl w-full"
+                onClick={publish}
+                disabled={!canShowPreview || linkedinPosting || shareSessionLoading}
+              >
+                {linkedinPosting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Posting from this browser
+                  </>
+                ) : (
+                  'Post from this browser (optional)'
+                )}
+              </Button>
 
               <div className="rounded-2xl border border-border/60 overflow-hidden bg-card">
                 <div className="p-4 border-b border-border/60">
@@ -1373,21 +1440,67 @@ export function PostGeneratorWizard() {
             </div>
           )}
 
-          {/* Step 7: Done */}
-          {step === 7 && (
+          {/* Step 7: QR for mobile posting */}
+          {step === 7 && shareSessionId && (
             <div className="space-y-5 text-center">
-              <div className="mx-auto w-16 h-16 rounded-full gradient-accent flex items-center justify-center text-white">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-white">Scan to post from mobile</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Scan the QR code with your phone, connect LinkedIn, and publish to your account.
+                </p>
+              </div>
+              <div className="mx-auto w-fit rounded-2xl border border-border/60 bg-white p-4">
+                <QRCode
+                  value={`${(process.env.NEXT_PUBLIC_APP_URL || '').trim() || (typeof window !== 'undefined' ? window.location.origin : '')}/m/share/${shareSessionId}`}
+                  size={220}
+                />
+              </div>
+              <div className="flex flex-col gap-3">
+                <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(6)}>
+                  Back to preview
+                </Button>
+                <Button variant="heroOutline" className="h-11 rounded-xl" onClick={startOver}>
+                  Start again
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === 7 && !shareSessionId && (
+            <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4 text-sm text-center text-white">
+              No share session. Go back to preview and generate a QR code.
+              <div className="mt-3">
+                <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(6)}>
+                  Back to preview
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 8: Posted from this browser */}
+          {step === 8 && (
+            <div className="space-y-5 text-center">
+              <div className="mx-auto w-16 h-16 rounded-full bg-white/20 border border-white/40 flex items-center justify-center text-white">
                 <Check className="w-7 h-7" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold tracking-tight">Thanks{fullName ? `, ${fullName}` : ''}!</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Your LinkedIn post has been published.
-                </p>
+                <h2 className="text-2xl font-bold tracking-tight text-white">
+                  Thanks{fullName ? `, ${fullName}` : ''}!
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">Your LinkedIn post has been published.</p>
               </div>
+              {linkedinPostUrl && (
+                <Button
+                  variant="outline"
+                  className="h-11 rounded-xl w-full"
+                  onClick={() => window.open(linkedinPostUrl, '_blank', 'noopener,noreferrer')}
+                >
+                  Open post
+                </Button>
+              )}
               <Button
                 variant="outline"
-                className="h-11 rounded-xl"
+                className="h-11 rounded-xl w-full"
                 onClick={() => {
                   window.location.assign('https://www.linkedin.com/feed/');
                 }}
@@ -1395,7 +1508,7 @@ export function PostGeneratorWizard() {
                 Go to LinkedIn
               </Button>
               <div className="flex flex-col gap-3">
-                <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(5)}>
+                <Button variant="outline" className="h-11 rounded-xl" onClick={() => setStep(6)}>
                   Back to preview
                 </Button>
                 <Button variant="heroOutline" className="h-11 rounded-xl" onClick={startOver}>
