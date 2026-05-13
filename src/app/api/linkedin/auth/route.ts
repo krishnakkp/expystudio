@@ -10,6 +10,8 @@ function getPublicOrigin(request: Request): string {
 export async function GET(request: Request) {
   const clientId = process.env.LINKEDIN_CLIENT_ID;
   const origin = getPublicOrigin(request);
+  const reqUrl = new URL(request.url);
+  const redirectAfter = reqUrl.searchParams.get('redirect');
 
   if (!clientId) {
     return NextResponse.json({ error: 'LinkedIn not configured' }, { status: 500 });
@@ -36,6 +38,16 @@ export async function GET(request: Request) {
     maxAge: 600,
     path: '/',
   });
+
+  if (redirectAfter && redirectAfter.startsWith('/') && !redirectAfter.startsWith('//')) {
+    response.cookies.set('li_redirect', redirectAfter, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 600,
+      path: '/',
+    });
+  }
 
   return response;
 }

@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   const fail = () => {
     const res = NextResponse.redirect(`${origin}/?linkedin=error`);
     res.cookies.delete('li_state');
+    res.cookies.delete('li_redirect');
     return res;
   };
 
@@ -71,8 +72,15 @@ export async function GET(request: NextRequest) {
       path: '/',
     };
 
-    const res = NextResponse.redirect(`${origin}/?linkedin=connected`);
+    const redirectPath = request.cookies.get('li_redirect')?.value;
+    const safePath =
+      redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : null;
+    const connectedSuffix = safePath?.includes('?') ? '&linkedin=connected' : '?linkedin=connected';
+    const target = safePath ? `${origin}${safePath}${connectedSuffix}` : `${origin}/?linkedin=connected`;
+
+    const res = NextResponse.redirect(target);
     res.cookies.delete('li_state');
+    res.cookies.delete('li_redirect');
     res.cookies.set('li_token', access_token, cookieOpts);
     res.cookies.set('li_urn', personUrn, cookieOpts);
     if (profile.name) {
