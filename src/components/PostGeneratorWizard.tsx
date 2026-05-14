@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -10,6 +10,13 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { useEventConfig } from '@/hooks/useEventConfig';
+import { buildGenericImageSlots, flatFirstPerSlot } from '@/lib/generic-post-images';
+import {
+  DEFAULT_AI_PROMPT_VARIANTS,
+  DEFAULT_CAPTION_OPTIONS,
+} from '@/lib/event-config-defaults';
+import { LinkedInReconnectError, uploadLinkedInPublicImageCandidates } from '@/lib/linkedin-public-image-client';
 import {
   ArrowLeft,
   ArrowRight,
@@ -22,8 +29,6 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { EXTRA_POST_IMAGE_CANDIDATES, EXTRA_POST_IMAGES } from '@/lib/extra-post-images';
-
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 type Rating = 0 | 1 | 2 | 3 | 4 | 5;
@@ -41,19 +46,10 @@ const SURVEY_QUESTIONS: { id: string; label: string }[] = [
   { id: 'q5', label: 'Did the event meet your expectations?' },
 ];
 
-const CAPTION_OPTIONS: string[] = [
-  `Great insights and meaningful conversations at the Dell Technologies Forum, with a clear focus on innovation and business transformation.\n\nThe discussions highlighted how technology continues to shape enterprise resilience and growth.\n\n#DellTechnologiesForum #DellTechForum #DellTechWorld`,
-  `An engaging experience at Dell Technologies Forum, bringing together leaders to explore the future of digital transformation.\n\nStrong emphasis on practical solutions and scalable innovation across industries.\n\n#DellTechnologies #DellTechnologiesForum2026 #DellTechForum`,
-  `Dell Technologies Forum delivered valuable perspectives on navigating today's evolving tech landscape.\n\nThe sessions reinforced the importance of aligning technology with strategic business priorities.\n\n#DellTechWorld #DellTechnologiesForum #DellTechnologiesForum2026`,
-  `Insightful sessions at Dell Technologies Forum showcasing how organizations are leveraging emerging technologies for competitive advantage.\n\nA strong platform for collaboration, learning, and forward-looking ideas.\n\n#DellTechForum #DellTechnologies #DellTechWorld`,
-];
-
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
 const SURVEY_CREATE_ENDPOINT =
   process.env.NEXT_PUBLIC_SURVEY_CREATE_URL?.trim() || 'https://expy.crafttechhub.com/survey/create';
 const SURVEY_EVENT_ID = process.env.NEXT_PUBLIC_SURVEY_EVENT_ID?.trim() || '';
-/** UUID of `public.events.id` for `survey_responses.events_id` (optional). */
-const EVENTS_ROW_UUID = process.env.NEXT_PUBLIC_EVENTS_UUID?.trim() || '';
 const AI_VARIANTS_TO_GENERATE = 4;
 
 function isValidEmail(value: string) {
@@ -239,6 +235,34 @@ async function copyToClipboard(text: string) {
 
 export function PostGeneratorWizard() {
   const { toast } = useToast();
+  const { config: eventConfig } = useEventConfig();
+
+  const captionOptions = useMemo(
+    () => (eventConfig.caption_options?.length ? eventConfig.caption_options : DEFAULT_CAPTION_OPTIONS),
+    [eventConfig.caption_options]
+  );
+
+  const genericSlots = useMemo(
+    () => buildGenericImageSlots(eventConfig.generic_image_urls),
+    [eventConfig.generic_image_urls]
+  );
+  const extraPreviewUrls = useMemo(() => flatFirstPerSlot(genericSlots), [genericSlots]);
+
+  const themeStyle = useMemo(
+    () =>
+      ({
+        ['--event-bg' as string]: eventConfig.background_color || '#0076CE',
+        ['--event-fg' as string]: eventConfig.foreground_color || '#ffffff',
+        ['--event-muted' as string]: eventConfig.secondary_color || 'rgba(255,255,255,0.85)',
+        ['--event-btn' as string]: eventConfig.button_bg_color || '#0672cb',
+        ['--event-btn-text' as string]: eventConfig.button_text_color || '#ffffff',
+        ['--event-btn-hover' as string]: eventConfig.button_bg_color
+          ? `color-mix(in srgb, ${eventConfig.button_bg_color} 88%, black)`
+          : '#00468b',
+        ['--event-btn-disabled' as string]: '#40576e',
+      }) as CSSProperties,
+    [eventConfig]
+  );
 
   const [step, setStep] = useState<Step>(1);
   const progressValue = useMemo(
@@ -280,7 +304,13 @@ export function PostGeneratorWizard() {
 
   // Step 5
   const [selectedCaptionIndex, setSelectedCaptionIndex] = useState<number | null>(null);
-  const selectedCaption = selectedCaptionIndex === null ? '' : CAPTION_OPTIONS[selectedCaptionIndex];
+  const selectedCaption = selectedCaptionIndex === null ? '' : captionOptions[selectedCaptionIndex] ?? '';
+
+  useEffect(() => {
+    if (selectedCaptionIndex !== null && selectedCaptionIndex >= captionOptions.length) {
+      setSelectedCaptionIndex(null);
+    }
+  }, [captionOptions.length, selectedCaptionIndex]);
 
   // LinkedIn
   const [linkedinConnected, setLinkedinConnected] = useState<boolean | null>(null);
@@ -450,15 +480,14 @@ export function PostGeneratorWizard() {
     };
   }, []);
 
-  const promptVariants = useMemo(() => ([
-    'Create a professional LinkedIn-style photo at a tech conference keynote stage. Keep it photorealistic, phone-camera look, natural lighting.',
-    'Create a professional LinkedIn-style networking photo in a conference lobby. Photorealistic, candid, realistic lighting and perspective.',
-    'Create a professional LinkedIn-style expo-floor photo near booths and banners. Photorealistic, phone-camera look, realistic background.',
-    'Create a professional LinkedIn-style photo in front of an event backdrop (step-and-repeat). Photorealistic, crisp, realistic shadows.',
-
-  ]), []);
-
-  
+  const promptVariants = useMemo(() => {
+    const base = eventConfig.prompt_variants?.length ? eventConfig.prompt_variants : DEFAULT_AI_PROMPT_VARIANTS;
+    const padded = [...base];
+    while (padded.length < AI_VARIANTS_TO_GENERATE) {
+      padded.push(DEFAULT_AI_PROMPT_VARIANTS[padded.length % DEFAULT_AI_PROMPT_VARIANTS.length]);
+    }
+    return padded.slice(0, AI_VARIANTS_TO_GENERATE);
+  }, [eventConfig.prompt_variants]);
 
   const generateFourImages = useCallback(async () => {
     if (!selfieDataUrl) return;
@@ -693,36 +722,11 @@ export function PostGeneratorWizard() {
       }
 
       // 2) Upload the 3 large public images server-side to avoid the 10MB request limit
-      for (let i = 0; i < EXTRA_POST_IMAGES.length; i++) {
-        setLinkedinProgress(`Uploading image ${i + 2} of ${EXTRA_POST_IMAGES.length + 1}…`);
-        let uploaded = false;
-        let lastError = `HTTP 500`;
-        const pathCandidates = EXTRA_POST_IMAGE_CANDIDATES[i] ?? [EXTRA_POST_IMAGES[i]];
-        for (const publicPath of pathCandidates) {
-          const upResp = await fetch('/api/linkedin/upload-public-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ publicPath }),
-          });
-          if (!upResp.ok) {
-            const { error, reconnectRequired } = await upResp
-              .json()
-              .catch(() => ({ error: `HTTP ${upResp.status}`, reconnectRequired: false }));
-            if (reconnectRequired) {
-              setLinkedinConnected(false);
-              throw new Error('Your LinkedIn session was revoked. Please reconnect and try again.');
-            }
-            lastError = error;
-            continue;
-          }
-          const { assetUrn } = await upResp.json();
-          assetUrns.push(assetUrn);
-          uploaded = true;
-          break;
-        }
-        if (!uploaded) {
-          throw new Error(lastError);
-        }
+      for (let i = 0; i < genericSlots.length; i++) {
+        setLinkedinProgress(`Uploading image ${i + 2} of ${genericSlots.length + 1}…`);
+        const pathCandidates = genericSlots[i] ?? [];
+        const assetUrn = await uploadLinkedInPublicImageCandidates(pathCandidates);
+        assetUrns.push(assetUrn);
       }
 
       setLinkedinProgress('Creating LinkedIn post…');
@@ -759,6 +763,9 @@ export function PostGeneratorWizard() {
       });
       setStep(8);
     } catch (err) {
+      if (err instanceof LinkedInReconnectError) {
+        setLinkedinConnected(false);
+      }
       setLinkedinError(getErrorMessage(err));
       toast({ title: 'LinkedIn publish failed', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
@@ -775,6 +782,7 @@ export function PostGeneratorWizard() {
     selfieDataUrl,
     selectedCaption,
     toast,
+    genericSlots,
   ]);
 
   const createShareSession = useCallback(async () => {
@@ -832,7 +840,7 @@ export function PostGeneratorWizard() {
           q3_event_experience: survey.q3,
           q4_recommend_likelihood: survey.q4,
           q5_expectations_met: survey.q5,
-          events_id: EVENTS_ROW_UUID || null,
+          events_id: eventConfig.id?.trim() || null,
         }),
       });
       if (!supaResp.ok) {
@@ -880,19 +888,22 @@ export function PostGeneratorWizard() {
     } finally {
       setSurveySubmitting(false);
     }
-  }, [canSubmitSurvey, surveySubmitting, surveySaved, fullName, email, companyName, survey, toast]);
+  }, [canSubmitSurvey, surveySubmitting, surveySaved, fullName, email, companyName, survey, toast, eventConfig.id]);
 
   return (
-    <div className="min-h-[100svh] w-full bg-[#0076CE] flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden">
+    <div
+      style={themeStyle}
+      className="min-h-[100svh] w-full bg-[var(--event-bg)] flex items-stretch sm:items-center justify-center px-0 sm:px-4 py-0 sm:py-6 overflow-hidden"
+    >
       <div className="w-full max-w-md">
-        <Card className="relative overflow-hidden border text-white [&_.text-muted-foreground]:text-white/85 shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] p-6 bg-[#0076CE] flex flex-col justify-center [&_button[class*='inline-flex']]:[background-image:none] [&_button[class*='inline-flex']]:border [&_button[class*='inline-flex']]:bg-[#0672cb] [&_button[class*='inline-flex']]:border-white/70 [&_button[class*='inline-flex']]:text-white [&_button[class*='inline-flex']:hover]:bg-[#00468b] [&_button[class*='inline-flex']:hover]:border-white/85 [&_button[class*='inline-flex']:disabled]:!bg-[#40576e] [&_button[class*='inline-flex']:disabled]:!border-white/70 [&_button[class*='inline-flex']:disabled]:!text-white/85">
+        <Card className="relative overflow-hidden border shadow-sm shadow-card border-border/40 rounded-none sm:rounded-3xl min-h-[100svh] p-6 bg-[var(--event-bg)] text-[var(--event-fg)] flex flex-col justify-center [&_.text-muted-foreground]:opacity-85 [&_button[class*='inline-flex']]:[background-image:none] [&_button[class*='inline-flex']]:border [&_button[class*='inline-flex']]:border-white/70 [&_button[class*='inline-flex']]:bg-[var(--event-btn)] [&_button[class*='inline-flex']]:text-[var(--event-btn-text)] [&_button[class*='inline-flex']:hover]:bg-[var(--event-btn-hover)] [&_button[class*='inline-flex']:disabled]:!bg-[var(--event-btn-disabled)] [&_button[class*='inline-flex']:disabled]:!border-white/70 [&_button[class*='inline-flex']:disabled]:!text-white/85">
           <div className="relative z-10 w-full">
           {/* Branding (inside card) */}
           <div className="flex items-center justify-center mb-4">
             <img
-              src="/event/dell.png"
-              alt="Dell Technologies"
-              className="h-8 w-auto drop-shadow"
+              src={eventConfig.logo_url || '/event/dell.png'}
+              alt={eventConfig.event_name || 'Event'}
+              className="h-8 w-auto max-w-[200px] object-contain drop-shadow"
             />
           </div>
 
@@ -900,9 +911,14 @@ export function PostGeneratorWizard() {
           {step === 1 && (
             <div className="space-y-5">
               <div>
-                <h1 className="text-3xl font-bold tracking-tight text-center text-white">
-                  Forum 2026
+                <h1 className="text-3xl font-bold tracking-tight text-center text-[var(--event-fg)]">
+                  {eventConfig.event_name}
                 </h1>
+                {eventConfig.tags && eventConfig.tags.length > 0 && (
+                  <p className="text-xs text-center opacity-90 mt-2">
+                    {eventConfig.tags.map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ')}
+                  </p>
+                )}
                 <p className="text-sm text-muted-foreground mt-3 text-center">
                   Accept consent to continue. You can connect LinkedIn when you post from your phone or this browser.
                 </p>
@@ -918,11 +934,12 @@ export function PostGeneratorWizard() {
               <div className="flex gap-3">
                 <Button
                   className={[
-                    'w-full h-11 !border !border-white/70 !text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-md disabled:opacity-100',
+                    'w-full h-11 !border !border-white/70 shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-md disabled:opacity-100',
                     canContinueConsent
-                      ? '!bg-[#0672cb]/85 hover:!bg-[#00468b]/90'
-                      : '!bg-[#40576e]/75 disabled:!text-white/85',
+                      ? '!bg-[color-mix(in_srgb,var(--event-btn)_85%,transparent)] hover:!bg-[var(--event-btn-hover)]'
+                      : '!bg-[var(--event-btn-disabled)] disabled:!text-white/85',
                   ].join(' ')}
+                  style={{ color: 'var(--event-btn-text)' }}
                   variant="hero"
                   disabled={!canContinueConsent}
                   onClick={() => setStep(2)}
@@ -1031,11 +1048,12 @@ export function PostGeneratorWizard() {
                 </Button>
                 <Button
                   className={[
-                    'flex-1 h-11 !border !border-white/70 !text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-md disabled:opacity-100',
+                    'flex-1 h-11 !border !border-white/70 shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-md disabled:opacity-100',
                     canContinuePhoto
-                      ? '!bg-[#0672cb]/85 hover:!bg-[#00468b]/90'
-                      : '!bg-[#40576e]/75 disabled:!text-white/85',
+                      ? '!bg-[color-mix(in_srgb,var(--event-btn)_85%,transparent)] hover:!bg-[var(--event-btn-hover)]'
+                      : '!bg-[var(--event-btn-disabled)] disabled:!text-white/85',
                   ].join(' ')}
+                  style={{ color: 'var(--event-btn-text)' }}
                   variant="hero"
                   disabled={!canContinuePhoto}
                   onClick={() => {
@@ -1236,12 +1254,12 @@ export function PostGeneratorWizard() {
               <div>
                 <h2 className="text-2xl font-bold tracking-tight">Pick your caption</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Choose 1 of 4 descriptions, then preview your post.
+                  Choose 1 of {captionOptions.length} descriptions, then preview your post.
                 </p>
               </div>
 
               <div className="space-y-3">
-                {CAPTION_OPTIONS.map((cap, idx) => {
+                {captionOptions.map((cap, idx) => {
                   const selected = selectedCaptionIndex === idx;
                   return (
                     <button
@@ -1329,7 +1347,7 @@ export function PostGeneratorWizard() {
                 {/* 3 images below */}
                 <div className="p-4">
                   <div className="grid grid-cols-3 gap-2">
-                    {EXTRA_POST_IMAGES.map((src, i) => (
+                    {extraPreviewUrls.map((src, i) => (
                       <div key={i} className="aspect-square rounded-lg overflow-hidden bg-neutral-100">
                         <img
                           src={src}

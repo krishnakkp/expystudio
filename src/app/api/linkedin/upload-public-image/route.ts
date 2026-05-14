@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { clearLinkedInCookies, isLinkedInRevokedToken } from '../_shared';
 
+const MAX_REMOTE_BYTES = 12 * 1024 * 1024;
+
 function guessMimeType(p: string) {
   const ext = p.toLowerCase();
   if (ext.endsWith('.png')) return 'image/png';
@@ -15,8 +17,38 @@ function isSafePublicPath(p: string) {
   if (!p.startsWith('/')) return false;
   const norm = path.posix.normalize(p);
   if (norm.includes('..')) return false;
-  // Restrict to known folders only
   return norm.startsWith('/red-hat/') || norm.startsWith('/event/') || norm.startsWith('/dell/');
+}
+
+function allowedImageUrlHosts(): Set<string> {
+  const set = new Set<string>();
+  const extra =
+    process.env.LINKEDIN_PUBLIC_IMAGE_URL_HOSTS?.split(/[,\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean) ?? [];
+  for (const h of extra) set.add(h);
+  for (const raw0 of [process.env.NEXT_PUBLIC_APP_URL, process.env.NEXT_PUBLIC_SUPABASE_URL]) {
+    const raw = raw0?.trim();
+    if (!raw) continue;
+    try {
+      const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+      set.add(u.hostname.toLowerCase());
+    } catch {
+      // ignore
+    }
+  }
+  return set;
+}
+
+function isAllowedHttpsImageUrl(urlStr: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(urlStr);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'https:') return false;
+  const hosts = allowedImageUrlHosts();
+  if (hosts.size === 0) return false;
+  return hosts.has(u.hostname.toLowerCase());
 }
 
 export async function POST(request: NextRequest) {
@@ -27,19 +59,52 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Not connected to LinkedIn' }, { status: 401 });
   }
 
-  const { publicPath } = (await request.json().catch(() => ({}))) as { publicPath?: string };
-  if (!publicPath || typeof publicPath !== 'string') {
-    return NextResponse.json({ error: 'Missing publicPath' }, { status: 400 });
-  }
-  if (!isSafePublicPath(publicPath)) {
-    return NextResponse.json({ error: 'Invalid publicPath' }, { status: 400 });
+  const body = (await request.json().catch(() => ({}))) as { publicPath?: string; imageUrl?: string };
+  const publicPath = typeof body.publicPath === 'string' ? body.publicPath : undefined;
+  const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl : undefined;
+
+  let bytes: Uint8Array;
+  let mimeType: string;
+
+  if (publicPath && !imageUrl) {
+    if (!isSafePublicPath(publicPath)) {
+      return NextResponse.json({ error: 'Invalid publicPath' }, { status: 400 });
+    }
+    const absPath = path.join(process.cwd(), 'public', publicPath);
+    bytes = new Uint8Array(await readFile(absPath));
+    mimeType = guessMimeType(publicPath);
+  } else if (imageUrl && !publicPath) {
+    if (!isAllowedHttpsImageUrl(imageUrl)) {
+      return NextResponse.json(
+        {
+          error:
+            'imageUrl host is not allowlisted. Set LINKEDIN_PUBLIC_IMAGE_URL_HOSTS (comma-separated hostnames) for HTTPS generic images.',
+        },
+        { status: 400 },
+      );
+    }
+    const imgResp = await fetch(imageUrl, {
+      redirect: 'follow',
+      headers: { 'User-Agent': 'expystudio-linkedin-upload/1.0' },
+    });
+    if (!imgResp.ok) {
+      return NextResponse.json({ error: `Failed to fetch imageUrl (${imgResp.status})` }, { status: 400 });
+    }
+    const len = Number(imgResp.headers.get('content-length') || 0);
+    if (len > MAX_REMOTE_BYTES) {
+      return NextResponse.json({ error: 'Remote image too large' }, { status: 400 });
+    }
+    const buf = new Uint8Array(await imgResp.arrayBuffer());
+    if (buf.byteLength > MAX_REMOTE_BYTES) {
+      return NextResponse.json({ error: 'Remote image too large' }, { status: 400 });
+    }
+    bytes = buf;
+    const headerType = imgResp.headers.get('content-type')?.split(';')[0]?.trim();
+    mimeType = headerType && headerType.startsWith('image/') ? headerType : guessMimeType(imageUrl);
+  } else {
+    return NextResponse.json({ error: 'Provide exactly one of publicPath or imageUrl' }, { status: 400 });
   }
 
-  const absPath = path.join(process.cwd(), 'public', publicPath);
-  const bytes = await readFile(absPath);
-  const mimeType = guessMimeType(publicPath);
-
-  // Step 1: Register upload slot with LinkedIn
   const regResp = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
     method: 'POST',
     headers: {
@@ -77,14 +142,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'LinkedIn did not return an upload URL' }, { status: 502 });
   }
 
-  // Step 2: Upload binary directly
   const uploadResp = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': mimeType,
     },
-    body: new Uint8Array(bytes),
+    body: bytes,
   });
 
   if (!uploadResp.ok) {
@@ -102,4 +166,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ assetUrn });
 }
-

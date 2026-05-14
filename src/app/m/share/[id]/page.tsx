@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { EXTRA_POST_IMAGE_CANDIDATES, EXTRA_POST_IMAGES } from '@/lib/extra-post-images';
+import { useEventConfig } from '@/hooks/useEventConfig';
+import { buildGenericImageSlots } from '@/lib/generic-post-images';
+import { LinkedInReconnectError, uploadLinkedInPublicImageCandidates } from '@/lib/linkedin-public-image-client';
 
 type ShareSession = {
   id: string;
@@ -14,6 +16,12 @@ type ShareSession = {
 };
 
 export default function MobileSharePage({ params }: { params: Promise<{ id: string }> }) {
+  const { config: eventConfig } = useEventConfig();
+  const genericSlots = useMemo(
+    () => buildGenericImageSlots(eventConfig.generic_image_urls),
+    [eventConfig.generic_image_urls]
+  );
+
   const [id, setId] = useState<string | null>(null);
   const [session, setSession] = useState<ShareSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,31 +111,10 @@ export default function MobileSharePage({ params }: { params: Promise<{ id: stri
       const { assetUrn: featuredUrn } = await uploadResp.json();
       if (featuredUrn) assetUrns.push(featuredUrn);
 
-      for (let i = 0; i < EXTRA_POST_IMAGES.length; i++) {
-        let uploaded = false;
-        let lastError = 'HTTP 500';
-        const pathCandidates = EXTRA_POST_IMAGE_CANDIDATES[i] ?? [EXTRA_POST_IMAGES[i]];
-        for (const publicPath of pathCandidates) {
-          const upResp = await fetch('/api/linkedin/upload-public-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ publicPath }),
-          });
-          if (!upResp.ok) {
-            const err = await upResp.json().catch(() => ({ error: `HTTP ${upResp.status}` }));
-            if (err?.reconnectRequired) {
-              setLinkedInConnected(false);
-              throw new Error('LinkedIn session expired. Please reconnect.');
-            }
-            lastError = err?.error || `HTTP ${upResp.status}`;
-            continue;
-          }
-          const { assetUrn } = await upResp.json();
-          if (assetUrn) assetUrns.push(assetUrn);
-          uploaded = true;
-          break;
-        }
-        if (!uploaded) throw new Error(typeof lastError === 'string' ? lastError : 'Extra image upload failed');
+      for (let i = 0; i < genericSlots.length; i++) {
+        const pathCandidates = genericSlots[i] ?? [];
+        const assetUrn = await uploadLinkedInPublicImageCandidates(pathCandidates);
+        assetUrns.push(assetUrn);
       }
 
       let postResp = await fetch('/api/linkedin/post', {
@@ -154,7 +141,12 @@ export default function MobileSharePage({ params }: { params: Promise<{ id: stri
       const data = await postResp.json();
       setPostUrl(data?.postUrl ?? null);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to post');
+      if (e instanceof LinkedInReconnectError) {
+        setLinkedInConnected(false);
+        setError('LinkedIn session expired. Please reconnect.');
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to post');
+      }
     } finally {
       setPosting(false);
       void refreshLinkedIn();
