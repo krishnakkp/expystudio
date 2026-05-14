@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { clearLinkedInCookies, isLinkedInRevokedToken } from '../_shared';
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
       Authorization: `Bearer ${token}`,
       'Content-Type': mimeType,
     },
-    body: bytes,
+    body: Buffer.from(bytes),
   });
 
   if (!uploadResp.ok) {

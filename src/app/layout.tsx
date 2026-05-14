@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={roboto.className}>
+      <body className={roboto.className} suppressHydrationWarning>
         <Providers>{children}</Providers>
         <Analytics />
       </body>

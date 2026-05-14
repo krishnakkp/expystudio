@@ -48,7 +48,7 @@ const SURVEY_QUESTIONS: { id: string; label: string }[] = [
 
 const WIZARD_STORAGE_KEY = 'eventstudio_postwizard_resume_step';
 const SURVEY_CREATE_ENDPOINT =
-  process.env.NEXT_PUBLIC_SURVEY_CREATE_URL?.trim() || 'https://expy.crafttechhub.com/survey/create';
+process.env.NEXT_PUBLIC_SURVEY_CREATE_URL?.trim() || 'https://expy.crafttechhub.com/survey/create';
 const SURVEY_EVENT_ID = process.env.NEXT_PUBLIC_SURVEY_EVENT_ID?.trim() || '';
 const AI_VARIANTS_TO_GENERATE = 4;
 
@@ -251,14 +251,14 @@ export function PostGeneratorWizard() {
   const themeStyle = useMemo(
     () =>
       ({
-        ['--event-bg' as string]: eventConfig.background_color || '#0076CE',
-        ['--event-fg' as string]: eventConfig.foreground_color || '#ffffff',
-        ['--event-muted' as string]: eventConfig.secondary_color || 'rgba(255,255,255,0.85)',
-        ['--event-btn' as string]: eventConfig.button_bg_color || '#0672cb',
-        ['--event-btn-text' as string]: eventConfig.button_text_color || '#ffffff',
+        ['--event-bg' as string]: eventConfig.background_color || '#0A0A09',
+        ['--event-fg' as string]: eventConfig.foreground_color || '#888780',
+        ['--event-muted' as string]: eventConfig.secondary_color || '#2A2A28',
+        ['--event-btn' as string]: eventConfig.button_bg_color || '#C8FF00',
+        ['--event-btn-text' as string]: eventConfig.button_text_color || '#2A2A28',
         ['--event-btn-hover' as string]: eventConfig.button_bg_color
           ? `color-mix(in srgb, ${eventConfig.button_bg_color} 88%, black)`
-          : '#00468b',
+          : '#a3cc00',
         ['--event-btn-disabled' as string]: '#40576e',
       }) as CSSProperties,
     [eventConfig]
@@ -901,7 +901,7 @@ export function PostGeneratorWizard() {
           {/* Branding (inside card) */}
           <div className="flex items-center justify-center mb-4">
             <img
-              src={eventConfig.logo_url || '/event/dell.png'}
+              src={eventConfig.logo_url || '/app/logo.png'}
               alt={eventConfig.event_name || 'Event'}
               className="h-8 w-auto max-w-[200px] object-contain drop-shadow"
             />

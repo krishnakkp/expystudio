@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'id,event_slug,event_name,public_app_url,background_color,foreground_color,secondary_color,button_bg_color,button_text_color,logo_url,generic_image_urls,prompt_variants,caption_options,tags,is_active,updated_at'
+        'id,event_name,public_app_url,background_color,foreground_color,secondary_color,button_bg_color,button_text_color,logo_url,generic_image_urls,prompt_variants,caption_options,tags,is_active,updated_at'
       )
       .eq('is_active', true)
       .order('updated_at', { ascending: false });

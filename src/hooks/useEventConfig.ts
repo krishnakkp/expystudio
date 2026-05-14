@@ -12,6 +12,18 @@ type ApiResponse = {
   error?: string;
 };
 
+/** When developing on the default Next port, resolve the same `public_app_url` row as production. */
+const LOCAL_DEV_EVENT_URL = 'https://app.expystudios.ai/';
+
+function resolveEventLookupUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const { hostname, port } = window.location;
+  const isDefaultNextDevPort =
+    (hostname === 'localhost' || hostname === '127.0.0.1') && port === '3000';
+  if (isDefaultNextDevPort) return LOCAL_DEV_EVENT_URL;
+  return process.env.NEXT_PUBLIC_APP_URL?.trim() || null;
+}
+
 export function useEventConfig() {
   const fallback = useMemo(() => getFallbackEventConfig(), []);
   const [config, setConfig] = useState<PublicEventConfig>(fallback);
@@ -25,8 +37,8 @@ export function useEventConfig() {
         setLoading(true);
         setFetchError(null);
         const u = new URL('/api/events/current', window.location.origin);
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
-        if (appUrl) u.searchParams.set('url', appUrl);
+        const lookupUrl = resolveEventLookupUrl();
+        if (lookupUrl) u.searchParams.set('url', lookupUrl);
         const resp = await fetch(u.toString(), { cache: 'no-store' });
         const json = (await resp.json().catch(() => ({}))) as ApiResponse;
         if (!resp.ok) {
